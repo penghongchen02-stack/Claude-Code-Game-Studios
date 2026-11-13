@@ -1,0 +1,35 @@
+L1	pass	evidence/play.png	bright gym, orange court, four rows of fans, the ball handler and defender read at once
+L2	pass	index.html:27	320x180 native, PIXEL true, whole-number scale, smoothing off; the camera follows the ball (updatePlay)
+L3	pass	evidence/figures.png	three silhouettes a team: tall thin Sharpshooter, short Slasher, wide tall Big; drawn ball, boxy backboard and rim
+L4	pass	evidence/play.png	players and ball the brightest; the court mid orange; the stands deep blue and lower contrast
+L5	pass	evidence/play.png	orange court with cream lines, deep blue stands, home white and green, away blue and red, orange ball, yellow meter; outlines a cool dark purple, floor shadows a warm dark
+L6	pass	evidence/figures.png	faces with an eye and mouth, six hair colours, trim stripes on jerseys; the crowd is repeated small heads
+L7	pass	evidence/figures.png	one pixel density, a dark outline on every part, flat colour plus trim; no emoji, no plain circles
+L8	pass	index.html:204	fill(): a full meter sets p.flash and state.crowd, so the player flashes and the rows bob
+L9	pass	evidence/figures.png	its own big-head figures in the proportions of the screenshots; nothing copied from Hoopland or Basketball Club Story
+L10	pass	evidence/play.png	2D side view; the camera lerps to the ball in updatePlay
+F1	pass	index.html:120	COURT is 640 px with a hoop at each end; six players; the camera scrolls with the ball; play.png
+F2	pass	index.html:320	useSpecial(): Heat Check, Jet Drive, Wall; the meter fills in fill() from baskets, assists, steals, blocks and passes
+F3	pass	index.html:210	startCharge snaps into the pose, the sweet band is drawn on the shot bar; an early X or Space waits in p.buffer (index.html:469)
+F4	pass	index.html:354	aiOffBall(): spots and timed cuts for both teams; Tab switches (switchCtrl); the AI's teammates shoot when open; yours shoot through you, since control follows the ball
+F5	pass	config.js:60	easy, normal and hard sets for reaction, shot error, contest, steal, block, special use, doubling and close_after; title picks them (index.html:822)
+F6	pass	config.js:11	half_seconds 120 x two halves; score and clock on the scoreboard (drawHUD); the results scene (index.html:867)
+F7	pass	index.html:818	title scene with the difficulty selector; results scene with Enter to play again
+S1	pass	index.html:320	one special per role, on both teams
+S2	pass	index.html:163	two teams of three
+S3	pass	config.js:11	two halves of two minutes
+S4	pass	config.js:60	three difficulty tiers the AI reads through ai()
+M1	pass	index.html:818	title: left/right picks Easy, Normal, Hard; Enter starts
+M2	pass	evidence/play.png	the home Slasher holds the ball on the left side of the court at tip-off; the clock starts at 2:00 (startHalf)
+M3	pass	evidence/play.png	the prompt reads ARROWS MOVE · X PASS · SPACE SHOOT
+M4	pass	index.html:789	the defender closes in aiDefender(); after the first pass the prompt changes to HOLD SPACE, RELEASE AT THE FLASH
+M5	pass	index.html:332	scoreBasket(): score, crowd bob, meter fill; the meter bar is drawn under each player
+M6	pass	index.html:482	Tab switches to the next defender; Space jumps (humanUpdate); a jump near a shot in flight blocks it
+M7	not_assessed	index.html:320	when the meter first fills depends on how the match goes; the Jet Drive dunk itself is built (useSpecial, startDunk)
+M8	not_assessed	-	whether the hook lands is the person's play
+C1	pass	config.js:81	normal: close_after 2, double 1 (second half), special 0.7; aiDefender() contests, jumps passes and shots, doubles
+C2	pass	config.js:85	hard: close_after 0, shot_err 0.2, block 0.75, double 2
+C3	pass	config.js:80	easy: double 0, close_after 4, contest 12
+C4	pass	index.html:225	launchShot(): the chance has no score term; no catch-up anywhere
+C5	pass	index.html:867	results scene: final score, Enter plays again
+C6	pass	config.js:60	a mark on the brief, nothing to build

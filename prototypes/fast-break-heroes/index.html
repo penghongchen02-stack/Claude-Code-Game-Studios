@@ -1,0 +1,922 @@
+<!doctype html>
+<!-- PROTOTYPE - NOT FOR PRODUCTION -->
+<!-- Question: does chaining passes and a special move into one flowing play feel good for a full short match against an AI that can do the same? -->
+<!-- Date: 2026-11-13 -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fast Break Heroes</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0a0a14; overflow: hidden; }
+  body { font-variant-numeric: tabular-nums; }
+  canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script src="config.js"></script>
+<script>
+'use strict';
+// Fast Break Heroes: pixel 3-on-3 basketball, side view, one special move per player.
+
+// ---- Built to be checked ----------------------------------------------------------------
+const params = new URLSearchParams(location.search);
+const tune = new Proxy({}, { get: (_, k) => CONFIG[k].value }); // live: tune.speed is CONFIG.speed.value
+const STEP = 1 / 60;            // simulation step in seconds; motion is per second, never per frame
+const W = 320, H = 180;         // native pixel size; scaled by whole numbers
+const PIXEL = true;             // pixel look: whole-number scale, no smoothing
+const FONT = 'monospace';
+const TITLE = 'FAST BREAK HEROES';
+const CONTROLS = ['Arrows / WASD: move', 'Space: shoot (hold, release at the flash) / jump', 'X: pass / steal', 'Shift: special (meter full)', 'Tab: switch defender', 'P: pause   M: mute'];
+const clock = window.GAME_CLOCK || { now: () => performance.now() / 1000 }; // a check may inject one
+const CHEAP = params.get('render') === 'cheap';
+let seed;
+function rng() { // mulberry32; every gameplay random call reads this, never Math.random
+  seed = (seed + 0x6D2B79F5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), seed | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+const events = []; // window.game.events: anything the game wants a run to see
+
+// ---- Screen ---------------------------------------------------------------------------
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+function fit() {
+  const k = Math.min(innerWidth / W, innerHeight / H);
+  const s = PIXEL ? Math.max(1, Math.floor(k)) : k;
+  const r = PIXEL ? 1 : s * (devicePixelRatio || 1);
+  canvas.width = Math.round(W * r); canvas.height = Math.round(H * r);
+  canvas.style.width = Math.round(W * s) + 'px'; canvas.style.height = Math.round(H * s) + 'px';
+  canvas.style.marginTop = Math.max(0, Math.floor((innerHeight - H * s) / 2)) + 'px';
+  canvas.style.imageRendering = PIXEL ? 'pixelated' : 'auto';
+  ctx.setTransform(r, 0, 0, r, 0, 0); ctx.imageSmoothingEnabled = !PIXEL;
+}
+addEventListener('resize', fit); fit();
+function clear(c) { ctx.fillStyle = c; ctx.fillRect(0, 0, W, H); }
+function text(s, x, y, size, c, align = 'center', bold = true) {
+  ctx.fillStyle = c; ctx.font = `${bold ? 'bold ' : ''}${size}px ${FONT}`; ctx.textAlign = align;
+  ctx.textBaseline = 'middle'; ctx.fillText(s, Math.round(x), Math.round(y));
+}
+function textOutlined(s, x, y, size, c, o, align = 'center') {
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) text(s, x + dx, y + dy, size, o, align);
+  text(s, x, y, size, c, align);
+}
+function rect(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); }
+function orect(x, y, w, h, c, o = OUT) { rect(x - 1, y - 1, w + 2, h + 2, o); rect(x, y, w, h, c); }
+
+// ---- Input: keys by position (event.code), OS key repeat ignored ------------------------
+const down = new Set(), hit = new Set();
+const pressed = code => hit.has(code);
+addEventListener('keydown', e => {
+  startAudio();
+  if (!e.repeat) { down.add(e.code); hit.add(e.code); }
+  if (e.code === 'Space' || e.code === 'Tab' || e.code.startsWith('Arrow')) e.preventDefault();
+});
+addEventListener('keyup', e => down.delete(e.code));
+addEventListener('pointerdown', () => startAudio());
+addEventListener('blur', () => down.clear());
+
+// ---- Audio: started on first input, mute on M --------------------------------------------
+let audio = null, muted = false;
+function startAudio() {
+  if (!audio) {
+    const ac = window.GAME_AUDIO || new (window.AudioContext || window.webkitAudioContext)();
+    const out = ac.createGain(); out.gain.value = muted ? 0 : tune.volume;
+    out.connect(ac.destination); audio = { ac, out };
+  }
+  if (audio.ac.state === 'suspended') audio.ac.resume();
+}
+function setMuted(m) { muted = m; if (audio) audio.out.gain.value = m ? 0 : tune.volume; }
+addEventListener('tune', () => setMuted(muted));
+function tone(freq, dur, type = 'square', vol = 0.3, slide = 0) {
+  if (!audio || muted) return;
+  const t = audio.ac.currentTime, o = audio.ac.createOscillator(), g = audio.ac.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g).connect(audio.out); o.start(t); o.stop(t + dur);
+}
+const sfx = {
+  bounce: () => tone(140, 0.07, 'sine', 0.25, -60),
+  swish: () => { tone(1200, 0.12, 'triangle', 0.2, -500); tone(1800, 0.08, 'sine', 0.1, -800); },
+  clank: () => { tone(420, 0.12, 'square', 0.2, -100); tone(300, 0.2, 'triangle', 0.15, -80); },
+  pass: () => tone(500, 0.06, 'triangle', 0.15, 200),
+  whoosh: () => tone(200, 0.35, 'sawtooth', 0.2, 900),
+  jump: () => tone(300, 0.1, 'sine', 0.12, 200),
+  block: () => { tone(90, 0.2, 'square', 0.3, -40); tone(60, 0.3, 'sawtooth', 0.2); },
+  steal: () => { tone(700, 0.08, 'square', 0.2, 300); tone(1000, 0.1, 'square', 0.15, 300); },
+  buzzer: () => { tone(180, 0.9, 'square', 0.3); tone(182, 0.9, 'sawtooth', 0.2); },
+  cheer: () => { for (let i = 0; i < 4; i++) tone(600 + i * 150, 0.25 + i * 0.05, 'triangle', 0.08, 150); },
+  special: () => { tone(400, 0.15, 'square', 0.2, 400); tone(800, 0.3, 'square', 0.2, 800); },
+  select: () => tone(900, 0.06, 'square', 0.15),
+};
+
+// ---- The world ---------------------------------------------------------------------------
+const OUT = '#1a1030';                                   // the outline on every figure
+const COURT = 640;                                       // court length in px, two screens wide
+const FLOOR_TOP = 124, FLOOR_DEPTH = 30, DEPTH_PX = 40;  // z in [0,1] runs FLOOR_DEPTH px down the screen, 40 px of court
+const HOOPS = [{ x: 26, dir: 1 }, { x: 614, dir: -1 }];  // dir: from the rim toward midcourt
+const RIM_H = 60;                                        // rim height above the floor
+const G = 320;                                           // gravity for the ball, px per second squared
+const floorY = z => FLOOR_TOP + z * FLOOR_DEPTH;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, k) => a + (b - a) * k;
+function dist2(a, b) { return Math.hypot(a.x - b.x, (a.z - b.z) * DEPTH_PX); }
+function dist3(ax, az, ah, bx, bz, bh) { return Math.hypot(ax - bx, (az - bz) * DEPTH_PX, ah - bh); }
+
+const ROLES = {
+  ss: { name: 'SHARPSHOOTER', special: 'HEAT CHECK', speed: 1.0, torso: [6, 8], legs: 8, legW: 2, three: 0.1, block: 0.9, hair: 'spiky' },
+  sl: { name: 'SLASHER', special: 'JET DRIVE', speed: 1.25, torso: [7, 6], legs: 5, legW: 2, three: -0.1, block: 0.8, hair: 'band' },
+  big: { name: 'BIG', special: 'WALL', speed: 0.85, torso: [11, 9], legs: 7, legW: 3, three: -0.25, block: 1.4, hair: 'flat' },
+};
+const TEAMS = [
+  { name: 'HOME', jersey: '#f4f4ec', trim: '#2fa84f', shorts: '#2fa84f', color: '#4de07a' },
+  { name: 'AWAY', jersey: '#2f5fd0', trim: '#e0393e', shorts: '#e0393e', color: '#ff6b6b' },
+];
+const HAIR = ['#3b2a1a', '#e8c84a', '#d04a2a', '#2a2a3a', '#8a4ad0', '#f0ead0'];
+const SKIN = ['#f3c9a0', '#c98a5a', '#f3c9a0', '#8a5a3a', '#f3c9a0', '#c98a5a'];
+const LEVELS = ['easy', 'normal', 'hard'];
+const ai = (p, key) => tune[`ai_${p.team === 1 ? state.level : 'normal'}_${key}`];
+
+// ---- State --------------------------------------------------------------------------------
+let scene, state;
+let level = 'normal';
+function mkPlayer(team, role, i) {
+  return {
+    id: i, team, role, x: 320, z: 0.5, h: 0, vh: 0, face: team === 0 ? 1 : -1, vx: 0, vz: 0, moving: false,
+    animT: rng() * 10, meter: 0, charge: -1, shootT: 0, jumping: false, stun: 0, lunge: 0, lungeRolled: false,
+    heat: 0, jet: 0, wall: 0, dunk: null, buffer: null, think: rng() * 0.3, cut: 0, cutT: tune.cut_every * (0.5 + rng()),
+    jumpVx: 0, jumpVz: 0, hair: HAIR[i], skin: SKIN[i], flash: 0, pushX: 0, pushZ: 0,
+  };
+}
+function reset() {
+  seed = Number(params.get('seed')) || CONFIG.seed;
+  state = {
+    t: 0, score: [0, 0], gained: '', level, half: 1, clock: tune.half_seconds, shotClock: tune.shot_clock,
+    players: [], ball: null, poss: 0, ctrl: 0, cam: 160, baskets: 0, sudden: false, dead: 0, crowd: 0,
+    popups: [], hints: { moved: false, passed: false, shot: false, defended: false, special: false }, shake: 0,
+    lastPasser: null, lastPassT: -9, ended: false, halfMsg: 0, flashT: 0,
+  };
+  const roles = ['sl', 'ss', 'big'];
+  for (let t = 0; t < 2; t++) for (let r = 0; r < 3; r++) state.players.push(mkPlayer(t, roles[r], t * 3 + r));
+  state.ball = { x: 320, z: 0.5, h: 0, vx: 0, vz: 0, vh: 0, holder: null, mode: 'held', pass: null, shot: null, dribT: 0, pickup: 0, trail: [] };
+  startHalf(1);
+}
+const hoopFor = team => HOOPS[(team === 0) === (state.half === 1) ? 1 : 0]; // the hoop a team attacks
+const defends = team => hoopFor(1 - team);                                     // the hoop a team defends
+function startHalf(half) {
+  state.half = half; state.clock = tune.half_seconds;
+  const team = half === 1 ? 0 : 1;
+  for (const p of state.players) {
+    const hoop = hoopFor(p.team), s = spotFor(p, hoop);
+    p.x = s.x; p.z = s.z; p.h = 0; p.jumping = false; p.charge = -1; p.dunk = null; p.heat = p.jet = p.wall = 0; p.stun = 0;
+    p.face = hoop.dir * -1;
+  }
+  const handler = state.players.find(p => p.team === team && p.role === 'sl');
+  const hoop = hoopFor(team);
+  handler.x = hoop.x + hoop.dir * 300; handler.z = 0.5;
+  for (const p of state.players) if (p.team !== team) { const d = defends(p.team); p.x = d.x + d.dir * (60 + 40 * (p.id % 3)); }
+  give(handler);
+  state.cam = clamp(handler.x - 160, 0, COURT - W);
+}
+function spotFor(p, hoop) {
+  const d = hoop.dir, side = (p.id % 2 === 0) ? 0.15 : 0.85;
+  if (p.role === 'ss') return { x: hoop.x + d * 125, z: side };
+  if (p.role === 'sl') return { x: hoop.x + d * 75, z: 1 - side };
+  return { x: hoop.x + d * 24, z: 0.5 };
+}
+function give(p) {
+  const b = state.ball;
+  b.holder = p; b.mode = 'held'; b.pass = null; b.shot = null; b.x = p.x; b.z = p.z; b.h = 8;
+  if (state.poss !== p.team) { state.shotClock = tune.shot_clock; }
+  state.poss = p.team;
+  if (p.team === 0) state.ctrl = p.id; else state.ctrl = nearestOf(0, b).id;
+}
+function nearestOf(team, at, except = null) {
+  let best = null, bd = 1e9;
+  for (const p of state.players) if (p.team === team && p !== except) { const d = dist2(p, at); if (d < bd) { bd = d; best = p; } }
+  return best;
+}
+function nearestOpp(p) { return nearestOf(1 - p.team, p); }
+function popup(x, z, h, s, c = '#fff') { state.popups.push({ x, z, h, s, c, t: 0 }); }
+function fill(p, amount) {
+  const was = p.meter >= 1; p.meter = clamp(p.meter + amount, 0, 1);
+  if (!was && p.meter >= 1) { p.flash = 1; state.crowd = Math.max(state.crowd, 1); sfx.special(); popup(p.x, p.z, 30, 'READY!', '#ffe14d'); }
+}
+
+// ---- Shooting, passing, stealing ------------------------------------------------------------
+function startCharge(p) {
+  const hoop = hoopFor(p.team);
+  if (dist2(p, { x: hoop.x, z: 0.5 }) < tune.dunk_range) { startDunk(p, false); return; }
+  p.charge = 0; p.face = Math.sign(hoop.x - p.x) || p.face; p.vx = p.vz = 0;
+}
+function releaseShot(p) {
+  const prog = p.charge / tune.shot_charge_time; p.charge = -1;
+  const width = tune.sweet_width * (p.heat > 0 ? tune.heat_sweet_mult : 1);
+  const errRaw = Math.abs(prog - tune.sweet_center) / width;
+  launchShot(p, { err: Math.min(errRaw, 2) / 2, outside: errRaw > 1, dunk: false, unblockable: false });
+}
+function launchShot(p, o) {
+  const b = state.ball, hoop = hoopFor(p.team);
+  const dist = dist2(p, { x: hoop.x, z: 0.5 });
+  const three = dist > tune.three_radius && !o.dunk;
+  let chance;
+  if (o.dunk) chance = o.unblockable ? 1 : tune.layup_chance;
+  else {
+    chance = tune.shot_base_chance * (1 - o.err * tune.timing_penalty) * (o.outside ? 0.5 : 1);
+    chance *= clamp(1 - Math.max(0, dist - 45) / tune.shot_range_falloff, 0.3, 1);
+    chance += three ? ROLES[p.role].three : ROLES[p.role].three * 0.5;
+    const q = nearestOpp(p);
+    if (q && dist2(q, p) < tune.contest_dist) chance -= tune.contest_penalty * (q.h > 3 ? 1.2 : 0.5);
+    if (p.heat > 0) chance = Math.max(chance, tune.heat_chance);
+  }
+  chance = clamp(chance, 0.03, 0.98);
+  // the Wall: a Big with its special up blocks any shot released in reach
+  if (!o.unblockable) for (const q of state.players) if (q.team !== p.team && q.wall > 0 && dist2(q, p) < tune.wall_range) {
+    blockBy(q, p); b.vx = p.face * 20; b.vz = 0; b.vh = 40; b.h = 14; return;
+  }
+  const made = rng() < chance;
+  const tx = hoop.x + (made ? 0 : (rng() < 0.5 ? -1 : 1) * (6 + rng() * 8));
+  const tz = 0.5 + (made ? 0 : (rng() - 0.5) * 0.3);
+  const th = RIM_H + (made ? 2 : 4 + rng() * 6);
+  const T = o.dunk ? 0.4 : 0.55 + dist / 260;
+  b.holder = null; b.mode = 'shot'; b.x = p.x + p.face * 3; b.z = p.z; b.h = o.dunk ? 22 : 26;
+  b.vx = (tx - b.x) / T; b.vz = (tz - b.z) / T; b.vh = (th - b.h + 0.5 * G * T * T) / T;
+  b.shot = { shooter: p, made, three, t: 0, T, hoop, unblockable: o.unblockable, dunk: o.dunk, heat: p.heat > 0 };
+  b.trail = [];
+  p.shootT = 0.45; p.heat = 0;
+  if (!o.dunk && !p.jumping) jump(p, 0, 0, 0.8);
+  state.shotClock = tune.shot_clock;
+  if (p.team === 0) state.hints.shot = true;
+  events.push({ t: state.t, type: 'shot', team: p.team, three, made });
+  if (o.dunk) sfx.whoosh(); else sfx.jump();
+}
+function startDunk(p, unblockable) {
+  const hoop = hoopFor(p.team);
+  p.dunk = { t: 0, T: 0.45, fx: p.x, fz: p.z, tx: hoop.x + hoop.dir * 8, tz: 0.5 };
+  p.face = Math.sign(hoop.x - p.x) || p.face; p.jet = 0;
+  launchShot(p, { err: 0, dunk: true, unblockable });
+}
+function blockBy(q, shooter) {
+  const b = state.ball;
+  b.holder = null; b.mode = 'loose'; b.shot = null; b.pass = null; b.pickup = 0.25;
+  b.x = shooter.x; b.z = shooter.z; b.h = Math.max(b.h, 12);
+  b.vx = -shooter.face * (40 + rng() * 30); b.vz = (rng() - 0.5) * 0.6; b.vh = 30;
+  fill(q, tune.meter_block); popup(q.x, q.z, 34, 'BLOCK!', '#7fd4ff'); sfx.block(); state.shake = 0.2;
+  if (q.team === 0) state.hints.defended = true;
+  events.push({ t: state.t, type: 'block', team: q.team });
+  state.poss = -1;
+}
+function startPass(p, target) {
+  const b = state.ball;
+  b.holder = null; b.mode = 'pass'; b.pass = { from: p, to: target, t: 0 }; b.h = 12; b.x = p.x; b.z = p.z;
+  p.face = Math.sign(target.x - p.x) || p.face; sfx.pass();
+  state.lastPasser = p; state.lastPassT = state.t;
+  if (p.team === 0) { state.hints.passed = true; state.ctrl = target.id; }
+  events.push({ t: state.t, type: 'pass', team: p.team });
+}
+function bestTarget(p, dir) {
+  let best = null, bs = -1e9;
+  for (const q of state.players) if (q.team === p.team && q !== p) {
+    const o = nearestOpp(q), open = o ? Math.min(40, dist2(o, q)) : 40;
+    let s = open;
+    const dx = q.x - p.x;
+    if (dir.x && Math.sign(dx) === Math.sign(dir.x)) s += 30;
+    if (dir.z && Math.sign(q.z - p.z) === Math.sign(dir.z)) s += 15;
+    if (!dir.x && !dir.z && Math.sign(dx) === p.face) s += 12;
+    const hoop = hoopFor(p.team); s += 10 - dist2(q, { x: hoop.x, z: 0.5 }) / 20;
+    if (s > bs) { bs = s; best = q; }
+  }
+  return best;
+}
+function jump(p, vx, vz, mult = 1) {
+  if (p.jumping || p.stun > 0) return;
+  p.jumping = true; p.jumpVx = vx; p.jumpVz = vz;
+  const T = tune.jump_time * mult;
+  p.jumpG = 8 * tune.jump_height * mult / (T * T); p.vh = p.jumpG * T / 2;
+}
+function lunge(p) {
+  if (p.lunge > 0 || p.stun > 0 || p.jumping) return;
+  const b = state.ball; p.lunge = tune.lunge_time; p.lungeRolled = false;
+  p.face = Math.sign(b.x - p.x) || p.face; sfx.jump();
+}
+function trySteal(p) {
+  const b = state.ball, h = b.holder;
+  if (!h || h.team === p.team || p.lungeRolled) return;
+  if (dist2(p, h) > tune.steal_range) return;
+  p.lungeRolled = true;
+  const chance = p.team === 0 ? tune.steal_chance : ai(p, 'steal');
+  if (h.jet > 0 || h.dunk || rng() >= chance) { p.stun = tune.steal_stun; popup(p.x, p.z, 26, 'MISS', '#ccc'); return; }
+  steal(p, h);
+}
+function steal(p, from) {
+  give(p); fill(p, tune.meter_steal); popup(p.x, p.z, 30, 'STEAL!', '#ffe14d'); sfx.steal();
+  from.stun = 0.3; p.lunge = 0;
+  if (p.team === 0) state.hints.defended = true;
+  events.push({ t: state.t, type: 'steal', team: p.team });
+}
+function useSpecial(p) {
+  if (p.meter < 1 || p.stun > 0) return false;
+  const b = state.ball;
+  if (p.role === 'ss') { if (b.holder !== p) return false; p.heat = tune.heat_duration; }
+  else if (p.role === 'sl') { if (b.holder !== p) return false; p.jet = tune.jet_duration; p.charge = -1; }
+  else { if (b.holder && b.holder.team === p.team) return false; p.wall = tune.wall_duration; }
+  p.meter = 0; p.flash = 0.6; state.crowd = Math.max(state.crowd, 1.2); sfx.whoosh(); sfx.special();
+  popup(p.x, p.z, 34, ROLES[p.role].special + '!', '#ffe14d');
+  if (p.team === 0) state.hints.special = true;
+  events.push({ t: state.t, type: 'special', team: p.team, role: p.role });
+  return true;
+}
+function scoreBasket(shot) {
+  const p = shot.shooter, pts = shot.three ? 3 : 2;
+  state.score[p.team] += pts; state.baskets++;
+  fill(p, tune.meter_basket);
+  if (state.lastPasser && state.lastPasser.team === p.team && state.lastPasser !== p && state.t - state.lastPassT < 3) fill(state.lastPasser, tune.meter_assist);
+  popup(shot.hoop.x, 0.5, RIM_H + 14, '+' + pts, TEAMS[p.team].color);
+  state.crowd = Math.max(state.crowd, p.team === 0 ? 1.5 : 0.6); sfx.swish(); if (p.team === 0) sfx.cheer();
+  events.push({ t: state.t, type: 'basket', team: p.team, pts });
+  if (state.sudden) endMatch();
+}
+function inbound(team) {
+  const hoop = defends(team), p = nearestOf(team, { x: hoop.x, z: 0.5 });
+  p.x = hoop.x + hoop.dir * 12; p.z = 0.5; p.h = 0; p.jumping = false; p.charge = -1; p.dunk = null;
+  const b = state.ball; b.pickup = 0; give(p); state.shotClock = tune.shot_clock;
+}
+function endMatch() {
+  const [hs, as] = state.score; state.ended = true; sfx.buzzer();
+  state.gained = hs > as ? `VICTORY ${hs}-${as}` : `DEFEAT ${hs}-${as}`;
+  scene = 'results';
+}
+
+// ---- The AI -------------------------------------------------------------------------------
+function aiOffBall(p, dt) {
+  const hoop = hoopFor(p.team), s = spotFor(p, hoop);
+  p.cutT -= dt;
+  if (p.cutT <= 0) { p.cut = 1; p.cutT = tune.cut_every * (0.6 + rng() * 0.8); }
+  if (p.cut > 0) { p.cut -= dt; s.x = hoop.x + hoop.dir * 18; }
+  moveToward(p, s, 1, dt);
+}
+function aiHandler(p, dt) {
+  const b = state.ball, hoop = hoopFor(p.team);
+  const dist = dist2(p, { x: hoop.x, z: 0.5 });
+  if (p.charge >= 0) { // release near its target
+    if (p.charge >= p.releaseAt) releaseShot(p);
+    return;
+  }
+  if (p.dunk) return;
+  if (p.jet > 0) { if (dist < tune.dunk_range) startDunk(p, true); else moveToward(p, { x: hoop.x + hoop.dir * 6, z: 0.5 }, 1, dt); return; }
+  p.think -= dt;
+  if (p.think > 0) { driveToward(p, hoop, dt); return; }
+  p.think = ai(p, 'reaction');
+  const q = nearestOpp(p), nd = q ? dist2(q, p) : 99;
+  const open = nd > tune.contest_dist * 0.9;
+  if (dist < tune.dunk_range && (open || rng() < 0.5)) { startDunk(p, false); return; }
+  if (p.meter >= 1 && rng() < ai(p, 'special')) {
+    if (p.role === 'ss' && dist > tune.three_radius * 0.75 && dist < tune.three_radius * 1.4) { useSpecial(p); beginAiShot(p); return; }
+    if (p.role === 'sl' && dist < 170 && dist > tune.dunk_range) { useSpecial(p); return; }
+  }
+  const range = p.role === 'ss' ? 175 : p.role === 'sl' ? 130 : 90;
+  const wants = (open && dist < range) || state.shotClock < 2.5 || (p.heat > 0 && dist < 180);
+  if (wants && dist < 200) { beginAiShot(p); return; }
+  if (nd < 20 || state.shotClock < 6) {
+    const t = bestTarget(p, { x: 0, z: 0 }), to = nearestOpp(t);
+    if (t && to && dist2(to, t) > 14 && rng() < 0.8) { startPass(p, t); return; }
+  }
+  driveToward(p, hoop, dt);
+}
+function beginAiShot(p) {
+  startCharge(p);
+  if (p.charge < 0) return; // it dunked instead
+  const width = tune.sweet_width * (p.heat > 0 ? tune.heat_sweet_mult : 1);
+  p.releaseAt = (tune.sweet_center + (rng() * 2 - 1) * ai(p, 'shot_err') * width * 2) * tune.shot_charge_time;
+}
+function driveToward(p, hoop, dt) {
+  const q = nearestOpp(p), goal = { x: hoop.x + hoop.dir * 22, z: 0.5 };
+  if (q && Math.abs(q.z - p.z) < 0.3 && Math.abs(q.x - p.x) < 24 && Math.sign(q.x - p.x) === Math.sign(goal.x - p.x)) {
+    goal.z = p.z < 0.5 ? 0.9 : 0.1; goal.x = p.x + Math.sign(goal.x - p.x) * 10; // step around
+  }
+  moveToward(p, goal, 1, dt);
+}
+function aiDefender(p, dt) {
+  const b = state.ball, dh = defends(p.team), hoop = { x: dh.x, z: 0.5 };
+  const handler = b.holder && b.holder.team !== p.team ? b.holder : (b.pass && b.pass.to.team !== p.team ? b.pass.to : null);
+  if (p.wall > 0 || p.lunge > 0 || p.jumping) return;
+  let mark = state.players.find(q => q.team !== p.team && q.role === p.role);
+  const active = state.baskets >= ai(p, 'close_after');
+  const dbl = ai(p, 'double'), doubling = handler && (dbl === 2 || (dbl === 1 && state.half === 2)) && p.role === 'big' && dist2(handler, hoop) < 150;
+  if (doubling) mark = handler;
+  const onBall = handler && mark === handler;
+  let gap = onBall ? (active ? ai(p, 'contest') * 0.8 : 24) : 12;
+  const toHoop = { x: hoop.x - mark.x, z: (hoop.z - mark.z) };
+  const L = Math.hypot(toHoop.x, toHoop.z * DEPTH_PX) || 1;
+  const goal = { x: mark.x + toHoop.x / L * gap, z: clamp(mark.z + toHoop.z / L * gap, 0.05, 0.95) };
+  moveToward(p, goal, 1, dt);
+  p.think -= dt;
+  if (p.think > 0 || !onBall || !active) return;
+  p.think = ai(p, 'reaction');
+  const d = dist2(p, handler);
+  if (p.role === 'big' && p.meter >= 1 && d < tune.wall_range * 0.8 && rng() < ai(p, 'special')) { useSpecial(p); return; }
+  if (handler.charge >= 0 && d < tune.block_range * 1.6 && rng() < ai(p, 'block')) { jump(p, 0, 0); p.face = Math.sign(handler.x - p.x) || p.face; return; }
+  if (b.holder === handler && d < tune.steal_range * 1.2 && handler.jet <= 0 && rng() < ai(p, 'steal') * 0.5) lunge(p);
+}
+function aiLoose(p, dt) {
+  const b = state.ball;
+  if (nearestOf(p.team, b) === p) moveToward(p, b, 1, dt); else aiOffBall(p, dt);
+}
+function moveToward(p, goal, k, dt) {
+  const dx = goal.x - p.x, dz = (goal.z - p.z) * DEPTH_PX, L = Math.hypot(dx, dz);
+  if (L < 2) { p.vx = p.vz = 0; return; }
+  const sp = speedOf(p) * k;
+  p.vx = dx / L * sp; p.vz = dz / L * sp / DEPTH_PX;
+  if (Math.abs(dx) > 1) p.face = Math.sign(dx);
+}
+function speedOf(p) {
+  let s = tune.player_speed * ROLES[p.role].speed;
+  if (p.jet > 0) s *= tune.jet_speed_mult;
+  if (p.lunge > 0) s *= 2.2;
+  if (p.charge >= 0 || p.stun > 0 || p.wall > 0) s = 0;
+  return s;
+}
+
+// ---- Human input --------------------------------------------------------------------------
+function humanUpdate(p, dt) {
+  const b = state.ball;
+  const dir = { x: (down.has('ArrowRight') || down.has('KeyD') ? 1 : 0) - (down.has('ArrowLeft') || down.has('KeyA') ? 1 : 0),
+                z: (down.has('ArrowDown') || down.has('KeyS') ? 1 : 0) - (down.has('ArrowUp') || down.has('KeyW') ? 1 : 0) };
+  const sp = speedOf(p);
+  if (!p.jumping && !p.dunk && p.lunge <= 0) {
+    if (p.jet > 0) { const hoop = hoopFor(p.team); p.vx = Math.sign(hoop.x - p.x) * sp; p.vz = dir.z * sp * 0.4 / DEPTH_PX; p.face = Math.sign(p.vx) || p.face; }
+    else {
+      const L = Math.hypot(dir.x, dir.z) || 1;
+      p.vx = dir.x / L * sp; p.vz = dir.z / L * sp / DEPTH_PX;
+      if (dir.x) { p.face = dir.x; if (sp > 0) state.hints.moved = true; }
+    }
+  }
+  const holding = b.holder === p;
+  if (holding) {
+    if (p.jet > 0) { const hoop = hoopFor(p.team); if (dist2(p, { x: hoop.x, z: 0.5 }) < tune.dunk_range) startDunk(p, true); return; }
+    if (p.charge >= 0) { if (!down.has('Space') || p.charge > tune.shot_charge_time * 1.15) releaseShot(p); return; }
+    if (pressed('Space') && !p.dunk) startCharge(p);
+    else if (pressed('KeyX')) { const t = bestTarget(p, dir); if (t) startPass(p, t); }
+    else if (pressed('ShiftLeft') || pressed('ShiftRight')) {
+      if (p.role === 'big' && p.meter >= 1) popup(p.x, p.z, 30, 'WALL: ON DEFENCE', '#ccc');
+      else if (p.meter < 1) popup(p.x, p.z, 30, 'METER NOT FULL', '#ccc');
+      else useSpecial(p);
+    }
+  } else if (b.mode === 'pass' && b.pass && b.pass.to === p) { // an early press waits for the ball
+    if (pressed('KeyX')) p.buffer = { act: 'pass', t: tune.pass_buffer, dir };
+    if (pressed('Space')) p.buffer = { act: 'shoot', t: tune.pass_buffer };
+  } else {
+    if (pressed('Space')) { jump(p, p.vx * 0.6, p.vz * 0.6); if (p.jumping) state.hints.defended = true; }
+    if (pressed('KeyX')) { lunge(p); state.hints.defended = true; }
+    if (pressed('Tab')) switchCtrl();
+    if (pressed('ShiftLeft') || pressed('ShiftRight')) {
+      if (p.role !== 'big' && p.meter >= 1) popup(p.x, p.z, 30, ROLES[p.role].special + ': WITH THE BALL', '#ccc');
+      else if (p.meter < 1) popup(p.x, p.z, 30, 'METER NOT FULL', '#ccc');
+      else useSpecial(p);
+    }
+  }
+}
+function switchCtrl() {
+  const b = state.ball, mine = state.players.filter(p => p.team === 0).sort((a, c) => dist2(a, b) - dist2(c, b));
+  const i = mine.findIndex(p => p.id === state.ctrl);
+  state.ctrl = mine[(i + 1) % mine.length].id; sfx.select();
+}
+
+// ---- The step ---------------------------------------------------------------------------------
+function updatePlay(dt) {
+  const s = state, b = s.ball;
+  s.t += dt;
+  if (s.dead <= 0 && !s.sudden) {
+    s.clock -= dt;
+    if (s.clock <= 0) {
+      s.clock = 0; sfx.buzzer();
+      if (s.half === 1) { scene = 'half'; return; }
+      if (s.score[0] === s.score[1]) { s.sudden = true; popup(b.x, b.z, 40, 'NEXT BASKET WINS', '#ffe14d'); s.crowd = 1.5; }
+      else { endMatch(); return; }
+    }
+  }
+  if (s.poss >= 0 && (b.mode === 'held' || b.mode === 'pass')) {
+    s.shotClock -= dt;
+    if (s.shotClock <= 0) { popup(b.x, b.z, 30, 'SHOT CLOCK', '#ff6b6b'); sfx.clank(); const t = 1 - s.poss; b.holder = null; b.mode = 'dead'; s.dead = 0.4; s.poss = t; s.inboundTo = t; }
+  }
+  // decisions
+  for (const p of s.players) {
+    if (p.stun > 0) { p.stun -= dt; p.vx = p.vz = 0; continue; }
+    if (p.dunk) continue;
+    const human = p.team === 0 && p.id === s.ctrl;
+    if (human) { humanUpdate(p, dt); continue; }
+    if (b.holder === p) aiHandler(p, dt);
+    else if (b.mode === 'loose' || b.mode === 'dead') aiLoose(p, dt);
+    else if (s.poss === p.team) aiOffBall(p, dt);
+    else aiDefender(p, dt);
+  }
+  // physics
+  for (const p of s.players) {
+    p.animT += dt;
+    if (p.heat > 0) p.heat -= dt;
+    if (p.jet > 0) { p.jet -= dt; if (p.jet <= 0 && b.holder === p) p.jet = 0; }
+    if (p.wall > 0) { p.wall -= dt; p.vx = p.vz = 0; }
+    if (p.flash > 0) p.flash -= dt;
+    if (p.shootT > 0) p.shootT -= dt;
+    if (p.charge >= 0) p.charge += dt;
+    if (p.buffer) { p.buffer.t -= dt; if (p.buffer.t <= 0) p.buffer = null; }
+    if (p.lunge > 0) {
+      p.lunge -= dt; const tx = b.x, tz = b.z; moveToward(p, { x: tx, z: tz }, 1, dt); trySteal(p);
+    }
+    if (p.dunk) {
+      const d = p.dunk; d.t += dt; const k = Math.min(1, d.t / d.T);
+      p.x = lerp(d.fx, d.tx, k); p.z = lerp(d.fz, d.tz, k); p.h = Math.sin(Math.PI * k) * tune.jump_height * 1.4;
+      if (k >= 1) { p.dunk = null; p.h = 0; }
+    } else if (p.jumping) {
+      p.h += p.vh * dt; p.vh -= p.jumpG * dt; p.x += p.jumpVx * dt; p.z += p.jumpVz * dt;
+      if (p.h <= 0) { p.h = 0; p.jumping = false; p.vh = 0; }
+      // a jumping defender blocks a shot in the air
+      if (b.mode === 'shot' && b.shot && !b.shot.unblockable && b.shot.shooter.team !== p.team && b.shot.t < tune.block_window
+          && dist3(p.x, p.z, p.h + 18, b.x, b.z, b.h) < tune.block_range * ROLES[p.role].block) blockBy(p, b.shot.shooter);
+    } else {
+      p.x += p.vx * dt; p.z += p.vz * dt;
+    }
+    p.moving = Math.abs(p.vx) > 1 || Math.abs(p.vz) > 0.02;
+    p.x = clamp(p.x, 6, COURT - 6); p.z = clamp(p.z, 0, 1);
+  }
+  // bodies push apart, a drive meets a defender
+  const R = tune.body_radius;
+  for (let i = 0; i < s.players.length; i++) for (let j = i + 1; j < s.players.length; j++) {
+    const a = s.players[i], c = s.players[j];
+    if (a.jet > 0 || c.jet > 0 || a.dunk || c.dunk || a.jumping || c.jumping) continue;
+    const dx = c.x - a.x, dz = (c.z - a.z) * DEPTH_PX, L = Math.hypot(dx, dz);
+    if (L < R && L > 0.01) {
+      const push = (R - L) / 2, ux = dx / L, uz = dz / L;
+      a.x -= ux * push; c.x += ux * push; a.z -= uz * push / DEPTH_PX; c.z += uz * push / DEPTH_PX;
+    }
+  }
+  // the ball
+  b.trail.unshift({ x: b.x, z: b.z, h: b.h }); if (b.trail.length > 6) b.trail.pop();
+  if (b.mode === 'held' && b.holder) {
+    const p = b.holder;
+    if (p.charge >= 0 || p.shootT > 0 || p.dunk) { b.x = p.x + p.face * 3; b.z = p.z; b.h = p.h + 26; }
+    else if (p.moving || p.jet > 0) { b.dribT += dt * (p.jet > 0 ? 18 : 11); const prev = b.h; b.h = Math.abs(Math.sin(b.dribT)) * 9; if (prev < 1.5 && b.h >= 1.5) sfx.bounce(); b.x = p.x + p.face * 6; b.z = p.z + 0.02; }
+    else { b.dribT += dt * 7; const prev = b.h; b.h = Math.abs(Math.sin(b.dribT)) * 7; if (prev < 1.5 && b.h >= 1.5) sfx.bounce(); b.x = p.x + p.face * 5; b.z = p.z + 0.02; }
+    for (const p2 of s.players) if (p2.buffer && p2 === p) { // the ball arrived: fire the buffered press
+      const bf = p2.buffer; p2.buffer = null;
+      if (bf.act === 'pass') { const t = bestTarget(p2, bf.dir); if (t) startPass(p2, t); } else startCharge(p2);
+    }
+  } else if (b.mode === 'pass') {
+    const ps = b.pass, to = ps.to; ps.t += dt;
+    const dx = to.x - b.x, dz = (to.z - b.z) * DEPTH_PX, dh = (to.h + 12) - b.h, L = Math.hypot(dx, dz, dh) || 1;
+    const v = tune.pass_speed;
+    b.x += dx / L * v * dt; b.z += dz / L * v * dt / DEPTH_PX; b.h += dh / L * v * dt;
+    if (L < tune.catch_radius || ps.t > 2) { give(to); fill(ps.from, tune.meter_pass); if (to.buffer) { /* fires next step */ } }
+    else for (const q of s.players) if (q.team !== to.team && dist3(q.x, q.z, q.h + 12, b.x, b.z, b.h) < 8 && ps.t > 0.08) {
+      const can = q.team === 0 ? q.lunge > 0 : (s.baskets >= ai(q, 'close_after') && rng() < ai(q, 'steal') * dt * 6);
+      if (can) { steal(q, ps.from); break; }
+    }
+  } else if (b.mode === 'shot') {
+    const sh = b.shot; sh.t += dt;
+    b.x += b.vx * dt; b.z += b.vz * dt; b.h += b.vh * dt; b.vh -= G * dt;
+    if (sh.t >= sh.T) {
+      if (sh.made) { scoreBasket(sh); b.mode = 'dead'; s.dead = 0.7; b.x = sh.hoop.x; b.z = 0.5; b.h = RIM_H; b.vh = -30; b.vx = 0; b.vz = 0; s.poss = 1 - sh.shooter.team; s.inboundTo = 1 - sh.shooter.team; }
+      else { b.mode = 'loose'; b.pickup = 0.15; sfx.clank(); b.x = sh.hoop.x + sh.hoop.dir * 4; b.h = RIM_H + 2; b.vx = sh.hoop.dir * (15 + rng() * 45) * (rng() < 0.8 ? 1 : -0.4); b.vz = (rng() - 0.5) * 0.8; b.vh = 30 + rng() * 40; s.poss = -1; popup(b.x, b.z, RIM_H + 10, 'MISS', '#ccc'); }
+      b.shot = null;
+    }
+  } else if (b.mode === 'loose') {
+    b.pickup -= dt;
+    b.x += b.vx * dt; b.z += b.vz * dt; b.h += b.vh * dt; b.vh -= G * dt;
+    if (b.h <= 0) { b.h = 0; b.vh = -b.vh * 0.55; b.vx *= 0.8; b.vz *= 0.8; if (Math.abs(b.vh) > 15) sfx.bounce(); }
+    if (b.x < 4 || b.x > COURT - 4) { b.vx = -b.vx * 0.6; b.x = clamp(b.x, 4, COURT - 4); }
+    b.z = clamp(b.z, 0, 1); if (b.z === 0 || b.z === 1) b.vz = -b.vz;
+    if (b.pickup <= 0 && b.h < 16) for (const q of s.players) if (q.stun <= 0 && dist3(q.x, q.z, q.h + 8, b.x, b.z, b.h) < 10) {
+      const was = s.poss; give(q); s.shotClock = tune.shot_clock; if (was !== q.team) { popup(q.x, q.z, 28, 'REBOUND', '#fff'); }
+      break;
+    }
+  } else if (b.mode === 'dead') {
+    s.dead -= dt; b.h += b.vh * dt; b.vh -= G * dt; if (b.h < 0) b.h = 0;
+    if (s.dead <= 0) inbound(s.inboundTo);
+  }
+  // camera, crowd, popups
+  s.cam = lerp(s.cam, clamp(b.x - W / 2, 0, COURT - W), Math.min(1, dt * 5));
+  if (s.crowd > 0) s.crowd -= dt;
+  if (s.shake > 0) s.shake -= dt;
+  for (const pp of s.popups) pp.t += dt;
+  s.popups = s.popups.filter(pp => pp.t < 1.1);
+}
+
+// ---- Drawing: figures ----------------------------------------------------------------------
+function drawHead(x, y, p, face) { // x,y: top-left of an 8x7 head; drawn facing right, flipped outside
+  const o = OUT, sk = p.skin, hr = p.hair, R = ROLES[p.role];
+  rect(x + 1, y, 6, 1, o); rect(x, y + 1, 8, 5, o); rect(x + 1, y + 6, 6, 1, o);
+  rect(x + 1, y + 1, 6, 5, sk);
+  // hair by role: its own silhouette
+  if (R.hair === 'spiky') { rect(x + 1, y + 1, 6, 2, hr); rect(x + 1, y - 1, 1, 1, o); rect(x + 3, y - 2, 1, 2, o); rect(x + 5, y - 1, 1, 1, o); rect(x + 1, y - 1, 0, 0, hr); rect(x + 3, y - 1, 1, 1, hr); rect(x + 5, y, 1, 1, hr); rect(x + 1, y, 1, 1, hr); }
+  else if (R.hair === 'band') { rect(x + 1, y + 1, 6, 1, hr); rect(x + 1, y + 2, 6, 1, TEAMS[p.team].trim); }
+  else { rect(x, y - 1, 8, 1, o); rect(x + 1, y, 6, 2, hr); rect(x, y + 1, 1, 2, hr); rect(x + 7, y + 1, 1, 2, hr); }
+  rect(x + 5, y + 3, 1, 1, '#fff'); rect(x + 6, y + 3, 1, 1, o); // the eye, looking ahead
+  rect(x + 6, y + 5, 1, 1, '#c0604a'); // the mouth
+}
+function drawPlayer(p, sx, fy, scale = 1) {
+  const R = ROLES[p.role], T = TEAMS[p.team], tw = R.torso[0], th = R.torso[1], legH = R.legs, lw = R.legW;
+  const hot = (p.heat > 0 || p.jet > 0 || p.wall > 0) && Math.floor(p.animT * 12) % 2 === 0;
+  const flash = p.flash > 0 && Math.floor(p.animT * 16) % 2 === 0;
+  const outline = hot ? '#ffe14d' : flash ? '#ffffff' : OUT;
+  ctx.save(); ctx.translate(Math.round(sx), Math.round(fy));
+  if (p.face < 0) ctx.scale(-1, 1);
+  // pose
+  let pose = 'idle';
+  if (p.stun > 0) pose = 'stun'; else if (p.wall > 0) pose = 'wall'; else if (p.dunk) pose = 'dunk';
+  else if (p.charge >= 0) pose = 'charge'; else if (p.shootT > 0 || (p.jumping && state.ball.holder === p)) pose = 'shoot';
+  else if (p.jumping) pose = 'jump'; else if (p.lunge > 0) pose = 'lunge'; else if (p.moving) pose = 'run';
+  const frame = Math.floor(p.animT * (p.jet > 0 ? 20 : 10)) % 4;
+  const bob = pose === 'run' ? (frame % 2 ? -1 : 0) : pose === 'idle' ? (Math.floor(p.animT * 2) % 2 ? 0 : -1) * 0 : 0;
+  const crouch = pose === 'charge' ? 2 : pose === 'stun' ? 1 : 0;
+  // legs
+  const legY = -legH + crouch, lx = -Math.floor(tw / 2) + 1, rx = Math.floor(tw / 2) - lw - 1;
+  let lo = 0, ro = 0, ll = legH - crouch, rl = legH - crouch;
+  if (pose === 'run') { const sw = [[2, -2], [0, 0], [-2, 2], [0, 0]][frame]; lo = sw[0]; ro = sw[1]; if (frame === 1) rl -= 1; if (frame === 3) ll -= 1; }
+  if (pose === 'jump' || pose === 'dunk' || pose === 'shoot') { ll -= 2; rl -= 1; lo = -1; ro = 1; }
+  if (pose === 'lunge') { lo = 3; ro = -2; }
+  if (pose === 'wall') { lo = -2; ro = 2; }
+  orect(lx + lo, -ll, lw, ll, p.skin, outline); orect(rx + ro, -rl, lw, rl, p.skin, outline);
+  // shoes
+  orect(lx + lo - 1, -2, lw + 2, 2, p.team === 0 ? '#3bd36a' : '#ff8c42', outline); orect(rx + ro - 1, -2, lw + 2, 2, p.team === 0 ? '#3bd36a' : '#ff8c42', outline);
+  // shorts and jersey
+  const bodyY = legY - 4 + bob;
+  orect(-Math.floor(tw / 2), bodyY, tw, 4, T.shorts, outline);
+  orect(-Math.floor(tw / 2), bodyY - th, tw, th, T.jersey, outline);
+  rect(-Math.floor(tw / 2), bodyY - th, 1, th, T.trim); rect(-Math.floor(tw / 2) + 1, bodyY - th + 2, tw - 2, 1, T.trim);
+  rect(Math.floor(tw / 2) - 2, bodyY - th + 4, 1, 2, T.trim);
+  // arms (2 px wide)
+  const top = bodyY - th, armC = p.skin;
+  if (pose === 'shoot' || pose === 'jump') { orect(Math.floor(tw / 2), top - 7, 2, 8, armC, outline); orect(-Math.floor(tw / 2) - 2, top - 4, 2, 6, armC, outline); }
+  else if (pose === 'dunk') { orect(Math.floor(tw / 2), top - 9, 2, 10, armC, outline); orect(-Math.floor(tw / 2) - 2, top + 1, 2, 5, armC, outline); }
+  else if (pose === 'charge') { orect(Math.floor(tw / 2), top - 2, 2, 5, armC, outline); orect(Math.floor(tw / 2) + 1, top - 5, 2, 4, armC, outline); orect(-Math.floor(tw / 2) - 2, top, 2, 5, armC, outline); }
+  else if (pose === 'wall') { orect(Math.floor(tw / 2), top - 3, 7, 2, armC, outline); orect(-Math.floor(tw / 2) - 7, top - 3, 7, 2, armC, outline); }
+  else if (pose === 'lunge') { orect(Math.floor(tw / 2), top + 1, 7, 2, armC, outline); orect(-Math.floor(tw / 2) - 2, top + 1, 2, 5, armC, outline); }
+  else if (pose === 'run') { const a = frame % 2 ? 2 : -2; orect(Math.floor(tw / 2), top + 1 + a, 2, 5, armC, outline); orect(-Math.floor(tw / 2) - 2, top + 1 - a, 2, 5, armC, outline); }
+  else { orect(Math.floor(tw / 2), top + 1, 2, th - 2, armC, outline); orect(-Math.floor(tw / 2) - 2, top + 1, 2, th - 2, armC, outline); }
+  // head (8x7), overlapping the jersey by 1
+  const hx = -4 + (pose === 'run' ? 1 : 0) + (pose === 'stun' ? 2 : 0), hy = top - 6;
+  if (outline !== OUT) { rect(hx - 1, hy - 1, 10, 9, outline); }
+  drawHead(hx, hy, p, p.face);
+  if (pose === 'stun') { rect(hx + 2, hy - 4, 1, 1, '#ffe14d'); rect(hx + 5, hy - 5, 1, 1, '#ffe14d'); rect(hx + 8, hy - 3, 1, 1, '#ffe14d'); }
+  if (p.jet > 0) for (let i = 0; i < 3; i++) rect(-Math.floor(tw / 2) - 6 - i * 4, top + 2 + i * 3, 4, 1, '#fff');
+  ctx.restore();
+}
+function drawBall(sx, sy) {
+  rect(sx - 2, sy - 3, 4, 1, OUT); rect(sx - 3, sy - 2, 6, 4, OUT); rect(sx - 2, sy + 2, 4, 1, OUT);
+  rect(sx - 2, sy - 2, 4, 4, '#f08a2e'); rect(sx - 1, sy - 2, 1, 4, '#8c3a12'); rect(sx - 2, sy, 4, 1, '#8c3a12'); rect(sx + 1, sy - 2, 1, 1, '#ffc27a');
+}
+function drawShadow(sx, sy, w) { ctx.fillStyle = 'rgba(40,20,10,0.35)'; ctx.fillRect(Math.round(sx - w / 2), Math.round(sy) - 1, w, 2); }
+
+// ---- Drawing: the gym ---------------------------------------------------------------------
+function hash(a, b) { let h = (a * 374761393 + b * 668265263) | 0; h = (h ^ (h >> 13)) * 1274126177; return ((h ^ (h >> 16)) >>> 0) / 4294967296; }
+const CROWD = ['#f3c9a0', '#c98a5a', '#8a5a3a', '#f3c9a0'], SHIRTS = ['#e04848', '#2f5fd0', '#f0e060', '#4de07a', '#ffffff', '#c080e0', '#ff8c42'];
+function drawGym(cam, t, crowd) {
+  // wall and the top of the stands
+  rect(0, 0, W, 40, '#2a3a6a'); rect(0, 36, W, 4, '#1c2850');
+  for (let i = 0; i < 6; i++) { const x = ((i * 70 - cam * 0.3) % 420 + 420) % 420 - 50; rect(x, 6, 24, 20, '#3a4e8a'); rect(x + 2, 8, 20, 16, '#9fc4ff'); rect(x + 2, 8, 20, 2, '#d8e8ff'); }
+  // the stands: four rows of fans
+  rect(0, 40, W, 70, '#1e2b5c');
+  for (let row = 0; row < 4; row++) {
+    const y = 46 + row * 16, par = 0.45 + row * 0.08;
+    rect(0, y + 10, W, 6, row % 2 ? '#2b3a72' : '#263468');
+    const start = Math.floor(cam * par / 6) - 1;
+    for (let c = 0; c <= W / 6 + 2; c++) {
+      const i = start + c, sx = Math.round(i * 6 - cam * par);
+      const bob = crowd > 0 && ((i + row + Math.floor(t * 8)) % 2 === 0) ? -2 : 0;
+      const sh = SHIRTS[Math.floor(hash(i, row) * SHIRTS.length)], sk = CROWD[Math.floor(hash(i + 7, row) * CROWD.length)];
+      const hc = HAIR[Math.floor(hash(i + 3, row + 1) * HAIR.length)];
+      rect(sx, y + 4 + bob, 4, 4, sh); rect(sx + 1, y + 1 + bob, 2, 3, sk); rect(sx, y + 2 + bob, 4, 2, sk); rect(sx + 1, y + bob, 2, 1, hc); rect(sx, y + 1 + bob, 1, 1, hc); rect(sx + 3, y + 1 + bob, 1, 1, hc);
+      if (crowd > 0 && bob) { rect(sx - 1, y + 2, 1, 2, sk); rect(sx + 4, y + 2, 1, 2, sk); }
+    }
+  }
+  // the ad boards
+  rect(0, 110, W, 8, '#f4ecd8'); rect(0, 117, W, 1, '#b8a890');
+  for (let i = -1; i < 12; i++) { const x = Math.round(((i * 40 - cam) % (COURT + 40) + (COURT + 40)) % (COURT + 40) - 40); rect(x + 4, 112, 14, 4, ['#e04848', '#2f5fd0', '#4de07a'][((i % 3) + 3) % 3]); rect(x + 22, 112, 10, 4, '#8a7a60'); }
+  // the floor
+  rect(0, 118, W, 40, '#e8893a'); rect(0, 118, W, 2, '#f2a558'); rect(0, 156, W, 2, '#b8601f');
+  for (let i = 0; i < 20; i++) rect(0, 121 + i * 2, W, 1, i % 2 ? '#e48434' : '#eb8f40');
+  rect(0, 158, W, 22, '#8a3f14'); rect(0, 158, W, 1, '#5a2808');
+  // court lines
+  const line = '#fff6dc';
+  const lx = (x) => Math.round(x - cam);
+  rect(lx(0), 118, 1, 40, line); rect(lx(COURT - 1), 118, 1, 40, line);
+  rect(lx(COURT / 2), 118, 1, 40, line);
+  ctx.strokeStyle = line; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.ellipse(lx(COURT / 2) + 0.5, 138, 18, 9, 0, 0, Math.PI * 2); ctx.stroke();
+  for (const hp of HOOPS) {
+    const r3 = tune.three_radius;
+    ctx.beginPath(); ctx.ellipse(lx(hp.x) + 0.5, 138, r3, 19, 0, hp.dir > 0 ? -Math.PI / 2 : Math.PI / 2, hp.dir > 0 ? Math.PI / 2 : 3 * Math.PI / 2); ctx.stroke();
+    const kx = hp.dir > 0 ? lx(hp.x - 26) : lx(hp.x + 26 - 56);
+    ctx.strokeRect(kx + 0.5, 124.5, 56, 28);
+  }
+}
+function drawHoop(hp, cam, front) {
+  const x = Math.round(hp.x - cam), fy = floorY(0.5), rimY = Math.round(fy - RIM_H);
+  if (!front) {
+    rect(x - hp.dir * 10 - 1, rimY - 22, 3, 60, OUT); rect(x - hp.dir * 10, rimY - 20, 1, 57, '#777'); // the pole
+    orect(x - hp.dir * 9 - (hp.dir < 0 ? 0 : 3), rimY - 20, 3, 26, '#f4f4ec'); // the backboard
+    rect(x - hp.dir * 9 - (hp.dir < 0 ? -1 : 2), rimY - 10, 1, 8, '#e04848');
+  } else {
+    rect(x - 5, rimY - 1, 10, 2, OUT); rect(x - 4, rimY, 8, 1, '#ff7a2a'); // the rim
+    for (let i = 0; i < 4; i++) { rect(x - 4 + i * 2 + (i % 2), rimY + 1 + i * 2, 1, 2, '#f4f4ec'); rect(x + 3 - i * 2 - (i % 2), rimY + 1 + i * 2, 1, 2, '#f4f4ec'); } // the net
+    rect(x - 2, rimY + 8, 4, 1, '#f4f4ec');
+  }
+}
+function drawWorld(cam) {
+  const s = state;
+  drawGym(cam, s.t, s.crowd);
+  for (const hp of HOOPS) drawHoop(hp, cam, false);
+  const b = s.ball;
+  // shadows
+  for (const p of s.players) drawShadow(p.x - cam, floorY(p.z), ROLES[p.role].torso[0] + 2);
+  drawShadow(b.x - cam, floorY(b.z) + 1, 4);
+  // the Wall's zone
+  for (const p of s.players) if (p.wall > 0) { ctx.fillStyle = 'rgba(255,225,77,0.18)'; ctx.fillRect(Math.round(p.x - cam - tune.wall_range), 60, tune.wall_range * 2, 96); }
+  // figures and the ball in depth order
+  const items = s.players.map(p => ({ z: p.z, p })); items.push({ z: b.z + 0.001, ball: true });
+  items.sort((a, c) => a.z - c.z);
+  for (const it of items) {
+    if (it.ball) {
+      if (b.mode === 'shot' && b.shot && b.shot.heat) for (let i = 1; i < b.trail.length; i++) { const tr = b.trail[i]; rect(tr.x - cam - 1, floorY(tr.z) - tr.h - 1, 2, 2, i < 3 ? '#ffe14d' : '#ff8c42'); }
+      drawBall(Math.round(b.x - cam), Math.round(floorY(b.z) - b.h - 2));
+    } else {
+      const p = it.p;
+      drawPlayer(p, p.x - cam, floorY(p.z) - p.h);
+    }
+  }
+  for (const hp of HOOPS) drawHoop(hp, cam, true);
+  // markers, meters, bars
+  for (const p of s.players) {
+    const sx = Math.round(p.x - cam), fy = Math.round(floorY(p.z));
+    const full = p.meter >= 1 && Math.floor(s.t * 8) % 2 === 0;
+    orect(sx - 5, fy + 2, 10, 2, '#2a2a3a'); rect(sx - 5, fy + 2, Math.round(10 * p.meter), 2, full ? '#fff' : p.meter >= 1 ? '#ffe14d' : TEAMS[p.team].color);
+    if (p.team === 0 && p.id === s.ctrl && scene !== 'figures') {
+      const ty = fy - p.h - ROLES[p.role].legs - 4 - ROLES[p.role].torso[1] - 12;
+      rect(sx - 3, ty - 3, 6, 1, OUT); rect(sx - 2, ty - 2, 4, 1, '#4de07a'); rect(sx - 1, ty - 1, 2, 1, '#4de07a'); rect(sx - 3, ty - 2, 1, 1, OUT); rect(sx + 2, ty - 2, 1, 1, OUT); rect(sx - 2, ty - 1, 1, 1, OUT); rect(sx + 1, ty - 1, 1, 1, OUT); rect(sx - 1, ty, 2, 1, OUT);
+      if (p.meter >= 1) textOutlined('SHIFT', sx, ty - 8, 6, '#ffe14d', OUT);
+    }
+    if (p.charge >= 0) { // the shot bar with its sweet spot
+      const prog = Math.min(1.2, p.charge / tune.shot_charge_time), width = tune.sweet_width * (p.heat > 0 ? tune.heat_sweet_mult : 1);
+      const bx = sx - 10, by = fy - p.h - 38;
+      orect(bx, by, 20, 3, '#2a2a3a');
+      rect(bx + Math.round(20 * (tune.sweet_center - width)), by, Math.max(1, Math.round(40 * width)), 3, '#ffe14d');
+      const inSweet = Math.abs(prog - tune.sweet_center) <= width;
+      rect(bx + Math.round(20 * Math.min(1, prog)) - 1, by - 1, 2, 5, inSweet ? '#fff' : '#ff6b6b');
+      if (inSweet) { rect(bx - 2, by - 3, 24, 1, '#fff'); rect(bx - 2, by + 5, 24, 1, '#fff'); }
+    }
+  }
+  for (const pp of s.popups) {
+    const sx = Math.round(pp.x - cam), sy = Math.round(floorY(pp.z) - pp.h - pp.t * 14);
+    textOutlined(pp.s, sx, sy, 7, pp.c, OUT);
+  }
+}
+function fmt(t) { t = Math.max(0, Math.ceil(t)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; }
+function drawHUD() {
+  const s = state;
+  orect(100, 3, 120, 15, '#141a33', OUT);
+  text(TEAMS[0].name, 118, 10, 7, TEAMS[0].color); text(String(s.score[0]), 142, 10, 10, '#fff');
+  text(s.sudden ? 'OT' : fmt(s.clock), 160, 8, 8, s.clock < 10 && !s.sudden ? '#ff6b6b' : '#fff');
+  text(s.sudden ? 'NEXT BASKET' : `${s.half === 1 ? '1ST' : '2ND'}  SC ${Math.max(0, Math.ceil(s.shotClock))}`, 160, 15, 5, '#ffd27a');
+  text(String(s.score[1]), 178, 10, 10, '#fff'); text(TEAMS[1].name, 202, 10, 7, TEAMS[1].color);
+  const d = s.level.toUpperCase(); text(d, 300, 8, 5, '#aab', 'right');
+  // the first minute's prompts
+  const b = s.ball, me = s.players[s.ctrl], h = s.hints;
+  let hint = '';
+  if (s.t < 90) {
+    if (b.holder === me && !h.passed) hint = 'ARROWS MOVE  ·  X PASS  ·  SPACE SHOOT';
+    else if (b.holder === me && !h.shot) hint = 'HOLD SPACE, RELEASE AT THE FLASH';
+    else if (s.poss === 1 && !h.defended) hint = 'TAB SWITCH  ·  SPACE JUMP  ·  X STEAL';
+  }
+  if (me.meter >= 1 && !h.special) hint = `SHIFT: ${ROLES[me.role].special}!`;
+  if (hint) textOutlined(hint, W / 2, 168, 7, '#fff', OUT);
+  // the roster's specials, small
+  text('SLASHER: JET DRIVE   SHARPSHOOTER: HEAT CHECK   BIG: WALL (DEFENCE)', W / 2, 176, 5, '#e8d8b8');
+}
+
+// ---- Scenes -------------------------------------------------------------------------------------
+const scenes = {
+  figures: {
+    update(dt) { state.t += dt; for (const p of state.players) p.animT += dt; },
+    draw() {
+      drawGym(160, state.t, 0);
+      text('EVERY FIGURE, EACH WITH ITS OWN OUTLINE', W / 2, 30, 8, '#fff');
+      const roles = ['sl', 'ss', 'big'];
+      for (let t = 0; t < 2; t++) for (let r = 0; r < 3; r++) {
+        const p = state.players[t * 3 + r], x = 40 + t * 150 + r * 46, fy = 118;
+        p.face = 1; p.moving = false; p.h = 0; p.charge = -1; p.stun = 0; p.wall = 0; p.jumping = false;
+        drawShadow(x, fy, 10); drawPlayer(p, x, fy);
+        textOutlined(ROLES[roles[r]].name, x, fy + 8, 5, '#fff', OUT);
+        textOutlined(TEAMS[t].name, x, fy + 15, 5, '#fff', OUT);
+      }
+      drawBall(W / 2, 100); textOutlined('BALL', W / 2, 110, 5, '#fff', OUT);
+      const hp = HOOPS[0]; drawHoop(hp, 0, false); drawHoop(hp, 0, true);
+    },
+  },
+  title: {
+    update(dt) {
+      state.t += dt;
+      const i = LEVELS.indexOf(level);
+      if (pressed('ArrowLeft') || pressed('ArrowUp') || pressed('KeyA')) { level = LEVELS[(i + 2) % 3]; sfx.select(); }
+      if (pressed('ArrowRight') || pressed('ArrowDown') || pressed('KeyD')) { level = LEVELS[(i + 1) % 3]; sfx.select(); }
+      if (pressed('Enter') || pressed('Space')) { reset(); scene = 'play'; }
+    },
+    draw() {
+      drawGym(160, state.t, 1);
+      for (const hp of HOOPS) { drawHoop(hp, 160, false); drawHoop(hp, 160, true); }
+      const t = state.t;
+      for (let i = 0; i < 6; i++) { const p = state.players[i]; p.animT = t; p.moving = true; p.face = i < 3 ? 1 : -1; drawShadow(60 + i * 40, 150, 10); drawPlayer(p, 60 + i * 40 + Math.sin(t * 2 + i) * 3, 150 - (i === 2 || i === 4 ? Math.abs(Math.sin(t * 3)) * 6 : 0)); }
+      drawBall(160 + Math.sin(t * 2) * 60, 130 - Math.abs(Math.sin(t * 4)) * 20);
+      orect(60, 30, 200, 34, '#141a33', OUT);
+      textOutlined(TITLE, W / 2, 42, 16, '#ffe14d', '#8a3f14');
+      text('PIXEL 3-ON-3 · ONE SPECIAL MOVE EACH', W / 2, 57, 6, '#fff');
+      orect(104, 70, 112, 14, '#1e2b5c', OUT);
+      text(`<  ${level.toUpperCase()}  >`, W / 2, 77, 9, '#fff');
+      text('DIFFICULTY: LEFT / RIGHT', W / 2, 90, 5, '#ffd27a');
+      CONTROLS.forEach((c, i) => textOutlined(c.toUpperCase(), W / 2, 100 + i * 7, 5, '#fff', OUT));
+      textOutlined(Math.floor(t * 2) % 2 ? 'PRESS ENTER TO TIP OFF' : '', W / 2, 165, 7, '#ffe14d', OUT);
+    },
+  },
+  play: {
+    update(dt) {
+      if (pressed('KeyP') || pressed('Escape')) { scene = 'pause'; return; }
+      updatePlay(dt);
+    },
+    draw() {
+      const shake = state.shake > 0 ? Math.round(Math.sin(state.t * 90)) : 0;
+      drawWorld(Math.round(state.cam) + shake);
+      drawHUD();
+    },
+  },
+  pause: {
+    update() { if (pressed('KeyP') || pressed('Escape') || pressed('Enter')) scene = 'play'; },
+    draw() { scenes.play.draw(); ctx.fillStyle = 'rgba(10,10,30,0.6)'; ctx.fillRect(0, 0, W, H); text('PAUSED', W / 2, H / 2 - 8, 16, '#fff'); text('P TO CONTINUE', W / 2, H / 2 + 10, 7, '#ccc'); },
+  },
+  half: {
+    update(dt) { state.t += dt; if (pressed('Enter') || pressed('Space')) { startHalf(2); state.popups = []; scene = 'play'; } },
+    draw() {
+      scenes.play.draw(); ctx.fillStyle = 'rgba(10,10,30,0.6)'; ctx.fillRect(0, 0, W, H);
+      text('HALF TIME', W / 2, 60, 16, '#ffe14d');
+      text(`${TEAMS[0].name} ${state.score[0]}   -   ${state.score[1]} ${TEAMS[1].name}`, W / 2, 85, 10, '#fff');
+      text('TEAMS SWAP ENDS', W / 2, 100, 6, '#ccc');
+      text('ENTER FOR THE SECOND HALF', W / 2, 120, 7, '#fff');
+    },
+  },
+  results: {
+    update(dt) {
+      state.t += dt;
+      if (pressed('Enter') || pressed('Space')) { reset(); scene = 'play'; }
+      if (pressed('KeyT') || pressed('Escape')) { scene = 'title'; }
+    },
+    draw() {
+      scenes.play.draw(); ctx.fillStyle = 'rgba(10,10,30,0.6)'; ctx.fillRect(0, 0, W, H);
+      const win = state.score[0] > state.score[1];
+      if (win) for (let i = 0; i < 40; i++) { const x = (i * 53 + state.t * 20 * (1 + i % 3)) % W, y = (i * 37 + state.t * 30) % H; rect(x, y, 2, 2, SHIRTS[i % SHIRTS.length]); }
+      textOutlined(win ? 'VICTORY' : 'DEFEAT', W / 2, 55, 22, win ? '#ffe14d' : '#9fb4ff', '#8a3f14');
+      text(`${TEAMS[0].name} ${state.score[0]}   -   ${state.score[1]} ${TEAMS[1].name}`, W / 2, 82, 10, '#fff');
+      text(`${state.level.toUpperCase()} AI`, W / 2, 95, 6, '#ccc');
+      text('ENTER: PLAY AGAIN      T: TITLE (CHANGE DIFFICULTY)', W / 2, 120, 7, '#fff');
+    },
+  },
+};
+
+// ---- Loop: fixed step, frame time clamped ---------------------------------------------
+function step() {
+  if (pressed('KeyM')) { setMuted(!muted); hit.delete('KeyM'); }
+  scenes[scene].update(STEP); hit.clear();
+}
+let last, acc = 0, ALPHA = 1;
+function tick() {
+  const now = clock.now();
+  acc += Math.min(now - last, 0.25); last = now;
+  while (acc >= STEP) { step(); acc -= STEP; }
+  ALPHA = acc / STEP;
+  drawFrame();
+}
+function drawFrame() { scenes[scene].draw(); }
+function frame() { tick(); requestAnimationFrame(frame); }
+function timer() { if (document.visibilityState === 'visible' && clock.now() - last > 0.1) tick(); }
+
+// ---- What a check can read and drive (?manual=1 stops the loop; players never see it) ----
+window.game = {
+  get scene() { return scene; },
+  get state() { return state; },
+  press(code) { hit.add(code); },
+  hold(code, on) { on ? down.add(code) : down.delete(code); },
+  get events() { return events; },
+  step(n = 1, draw = true, alpha = 1) {
+    for (let i = 0; i < n; i++) step();
+    if (draw) { ALPHA = alpha; drawFrame(); }
+  },
+};
+
+reset();
+scene = params.get('scene') || 'title';
+last = clock.now();
+if (params.get('manual') === '1') drawFrame();
+else { requestAnimationFrame(frame); setInterval(timer, 50); }
+</script>
+</body>
+</html>

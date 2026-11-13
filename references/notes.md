@@ -1,0 +1,4 @@
+- basketball-club-story-title.png: take: the bright court, the crowd rows, the outlined big-head pixel players
+- basketball-club-story-victory.png: take: the celebration pose, the confetti and ray burst, the crowd
+- basketball-club-story-players.jpg: take: the player proportions and outline, two-tone shading, the court lines
+- basketball-club-story-club.png: take: the palette and the HUD framing; the club side is for later

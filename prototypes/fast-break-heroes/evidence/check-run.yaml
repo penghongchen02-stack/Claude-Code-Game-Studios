@@ -1,0 +1,183 @@
+# The one-shot's small check (check-run/1).
+# Written by one-shot-check.sh --record: the results are /prototype's reading of
+# evidence/self-check.tsv; never edited by hand.
+kind: check-run/1
+engine: web
+browser: "HeadlessChrome/153.0.0.0"
+time: "2026-11-13 06:33:36"
+checks:
+  - id: boots
+    result: pass
+    evidence:
+      - "evidence/self-check.tsv"
+  - id: shot
+    result: not_run
+    mark: not assessed
+    why: "the check's own screenshot stage timed out at 180 s in this container on every run; a play screenshot taken with the browser directly is at evidence/play.png and was looked at"
+    evidence:
+  - id: outlines
+    result: pass
+    evidence:
+      - "evidence/figures.png"
+  - id: brief-words
+    result: pass
+    evidence:
+      - "evidence/brief-words.tsv"
+  - id: emoji
+    result: pass
+    evidence:
+      - "evidence/self-check.tsv"
+  - id: nearest-game
+    result: pass
+    evidence:
+      - "evidence/nearest-game.txt"
+brief_checklist:
+  - id: L1
+    result: pass
+    evidence: "evidence/play.png"
+    item: "Mood: bright, cheerful sports-club pixel art; a sunny gym with a cheering crowd; every move reads at a glance."
+  - id: L2
+    result: pass
+    evidence: "index.html:27"
+    item: "Camera and scale: 2D side view of the court, scrolling with the ball (`follow2d`); native 320x180, scaled by whole numbers, pixel smoothing off."
+  - id: L3
+    result: pass
+    evidence: "evidence/figures.png"
+    item: "Shapes: chunky big-headed players about two heads tall, each of the three roles its own silhouette (lanky Sharpshooter, low compact Slasher, wide tall Big); round ball, boxy hoop and backboard."
+  - id: L4
+    result: pass
+    evidence: "evidence/play.png"
+    item: "Values: players and ball brightest; court mid-tone; crowd and stands held darker and lower in contrast."
+  - id: L5
+    result: pass
+    evidence: "evidence/play.png"
+    item: "Palette: warm orange court with cream lines, deep blue stands, your team in white and green, theirs in blue and red, the ball bright orange, meter glow yellow; shadows shift cooler."
+  - id: L6
+    result: pass
+    evidence: "evidence/figures.png"
+    item: "Detail: on faces, hair and jerseys; the crowd is simple repeated rows."
+  - id: L7
+    result: pass
+    evidence: "evidence/figures.png"
+    item: "Rules: one pixel density, thick dark outline on every figure, two-tone shading, every figure drawn, no emoji, no plain circles."
+  - id: L8
+    result: pass
+    evidence: "index.html:204"
+    item: "Signature: a full special-move meter makes the player flash and the crowd's rows bob."
+  - id: L9
+    result: pass
+    evidence: "evidence/figures.png"
+    item: "References: Hoopland (snappy few-frame motion, the flow of a side-view match, the match feel); your four screenshots in `references/` (the proportions, the outlined big-head sprites, the bright court and crowd)."
+  - id: L10
+    result: pass
+    evidence: "evidence/play.png"
+    item: "View: 2D · Camera: side view, follows the ball."
+  - id: F1
+    result: pass
+    evidence: "index.html:120"
+    item: "3-on-3 full-court match, side view, scrolling with the ball"
+  - id: F2
+    result: pass
+    evidence: "index.html:320"
+    item: "Three player roles with their own silhouette and one special move each, on a meter filled by good play"
+  - id: F3
+    result: pass
+    evidence: "index.html:210"
+    item: "Shot timing with a visible sweet spot; a press snaps straight into the pose; a pass pressed early fires when the ball arrives"
+  - id: F4
+    result: pass
+    evidence: "index.html:354"
+    item: "Teammates spread the floor, cut and shoot when open; switch defender with a key"
+  - id: F5
+    result: pass
+    evidence: "config.js:60"
+    item: "AI opponents at Easy, Normal and Hard, using the same moves and specials as you"
+  - id: F6
+    result: pass
+    evidence: "config.js:11"
+    item: "Short clock, two halves of two minutes, score and clock big on screen, then a results screen *(half length provisional)*"
+  - id: F7
+    result: pass
+    evidence: "index.html:818"
+    item: "Title screen with difficulty select, and Play Again"
+  - id: S1
+    result: pass
+    evidence: "index.html:320"
+    item: "one special move for each player · in the slice"
+  - id: S2
+    result: pass
+    evidence: "index.html:163"
+    item: "3 on 3 · in the slice"
+  - id: S3
+    result: pass
+    evidence: "config.js:11"
+    item: "a short clock · in the slice"
+  - id: S4
+    result: pass
+    evidence: "config.js:60"
+    item: "AI with different levels of difficulty · in the slice"
+  - id: M1
+    result: pass
+    evidence: "index.html:818"
+    item: "Title screen: pick a difficulty (Easy, Normal, Hard), press Start."
+  - id: M2
+    result: pass
+    evidence: "evidence/play.png"
+    item: "Tip-off; your Slasher has the ball at the left, the clock reads 2:00."
+  - id: M3
+    result: pass
+    evidence: "evidence/play.png"
+    item: "A prompt shows \"arrows move, X pass\"."
+  - id: M4
+    result: pass
+    evidence: "index.html:789"
+    item: "You dribble right, a defender steps up, you pass to the open Sharpshooter; a prompt shows \"hold Space, release at the flash\"."
+  - id: M5
+    result: pass
+    evidence: "index.html:332"
+    item: "The shot goes in, the crowd bobs, the score reads 2-0, and the special meter under your player fills a notch."
+  - id: M6
+    result: pass
+    evidence: "index.html:482"
+    item: "The AI brings it up; you press Tab to the nearest defender and jump at their shot."
+  - id: M7
+    result: not_run
+    mark: not assessed
+    why: "when the meter first fills depends on how the match goes; the Jet Drive dunk itself is built (useSpecial, startDunk)"
+    evidence: "index.html:320"
+    item: "Around the 40-second mark your meter fills, the player flashes, and Shift fires the Slasher's burst drive straight past two defenders into a dunk."
+  - id: M8
+    result: not_run
+    mark: not assessed
+    why: "whether the hook lands is the person's play"
+    item: "That is the hook landing."
+  - id: C1
+    result: pass
+    evidence: "config.js:81"
+    item: "On Normal, after the first two baskets the AI closes out on shooters, jumps lazy passes and runs its own specials when its meter fills; by the second half it doubles your ball handler."
+  - id: C2
+    result: pass
+    evidence: "config.js:85"
+    item: "On Hard it does all of that from the tip, and its shooter rarely misses an open look."
+  - id: C3
+    result: pass
+    evidence: "config.js:80"
+    item: "On Easy it contests late and never doubles."
+  - id: C4
+    result: pass
+    evidence: "index.html:225"
+    item: "There is no catch-up boost: a strict, even contest."
+  - id: C5
+    result: pass
+    evidence: "index.html:867"
+    item: "A loss ends the match with the final score and a Play Again button."
+  - id: C6
+    result: pass
+    evidence: "config.js:60"
+    item: "*(difficulty tiers guessed)*"
+measures:
+  - id: step-time
+    value: 1.100
+    unit: ms
+    by: browser
+    detail: "mean 0.033 ms, slowest 1.100 ms, 380 steps"

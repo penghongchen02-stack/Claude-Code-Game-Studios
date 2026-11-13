@@ -1,0 +1,57 @@
+time	2026-11-13 06:33:36
+keep	lines	0	pinned	0
+checklist	L1	unlisted	-	Mood: bright, cheerful sports-club pixel art; a sunny gym with a cheering crowd; every move reads at a glance.	
+checklist	L2	unlisted	-	Camera and scale: 2D side view of the court, scrolling with the ball (`follow2d`); native 320x180, scaled by whole numbers, pixel smoothing off.	
+checklist	L3	unlisted	-	Shapes: chunky big-headed players about two heads tall, each of the three roles its own silhouette (lanky Sharpshooter, low compact Slasher, wide tall Big); round ball, boxy hoop and backboard.	
+checklist	L4	unlisted	-	Values: players and ball brightest; court mid-tone; crowd and stands held darker and lower in contrast.	
+checklist	L5	unlisted	-	Palette: warm orange court with cream lines, deep blue stands, your team in white and green, theirs in blue and red, the ball bright orange, meter glow yellow; shadows shift cooler.	
+checklist	L6	unlisted	-	Detail: on faces, hair and jerseys; the crowd is simple repeated rows.	
+checklist	L7	unlisted	-	Rules: one pixel density, thick dark outline on every figure, two-tone shading, every figure drawn, no emoji, no plain circles.	
+checklist	L8	unlisted	-	Signature: a full special-move meter makes the player flash and the crowd's rows bob.	
+checklist	L9	unlisted	-	References: Hoopland (snappy few-frame motion, the flow of a side-view match, the match feel); your four screenshots in `references/` (the proportions, the outlined big-head sprites, the bright court and crowd).	
+checklist	L10	unlisted	-	View: 2D · Camera: side view, follows the ball.	
+checklist	F1	unlisted	-	3-on-3 full-court match, side view, scrolling with the ball	
+checklist	F2	unlisted	-	Three player roles with their own silhouette and one special move each, on a meter filled by good play	
+checklist	F3	unlisted	-	Shot timing with a visible sweet spot; a press snaps straight into the pose; a pass pressed early fires when the ball arrives	
+checklist	F4	unlisted	-	Teammates spread the floor, cut and shoot when open; switch defender with a key	
+checklist	F5	unlisted	-	AI opponents at Easy, Normal and Hard, using the same moves and specials as you	
+checklist	F6	unlisted	-	Short clock, two halves of two minutes, score and clock big on screen, then a results screen *(half length provisional)*	
+checklist	F7	unlisted	-	Title screen with difficulty select, and Play Again	
+checklist	S1	unlisted	-	one special move for each player · in the slice	
+checklist	S2	unlisted	-	3 on 3 · in the slice	
+checklist	S3	unlisted	-	a short clock · in the slice	
+checklist	S4	unlisted	-	AI with different levels of difficulty · in the slice	
+checklist	M1	unlisted	-	Title screen: pick a difficulty (Easy, Normal, Hard), press Start.	
+checklist	M2	unlisted	-	Tip-off; your Slasher has the ball at the left, the clock reads 2:00.	
+checklist	M3	unlisted	-	A prompt shows "arrows move, X pass".	
+checklist	M4	unlisted	-	You dribble right, a defender steps up, you pass to the open Sharpshooter; a prompt shows "hold Space, release at the flash".	
+checklist	M5	unlisted	-	The shot goes in, the crowd bobs, the score reads 2-0, and the special meter under your player fills a notch.	
+checklist	M6	unlisted	-	The AI brings it up; you press Tab to the nearest defender and jump at their shot.	
+checklist	M7	unlisted	-	Around the 40-second mark your meter fills, the player flashes, and Shift fires the Slasher's burst drive straight past two defenders into a dunk.	
+checklist	M8	unlisted	-	That is the hook landing.	
+checklist	C1	unlisted	-	On Normal, after the first two baskets the AI closes out on shooters, jumps lazy passes and runs its own specials when its meter fills; by the second half it doubles your ball handler.	
+checklist	C2	unlisted	-	On Hard it does all of that from the tip, and its shooter rarely misses an open look.	
+checklist	C3	unlisted	-	On Easy it contests late and never doubles.	
+checklist	C4	unlisted	-	There is no catch-up boost: a strict, even contest.	
+checklist	C5	unlisted	-	A loss ends the match with the final score and a Play Again button.	
+checklist	C6	unlisted	-	*(difficulty tiers guessed)*	
+browser	HeadlessChrome/153.0.0.0
+scene	play	0	title
+scene	play	1	play
+digits	log	bold 6px monospace	tabular	0
+digits	log	bold 10px monospace	tabular	0
+digits	log	bold 8px monospace	tabular	0
+digits	log	bold 4px monospace	tabular	0
+measure	step-time	play	0.033	1.100	380
+lane	play	stop	6.3	112
+uncaught	play	0
+text	play	canvas	489,35,539,56	44.9	10.00	inside	HOME
+text	play	canvas	577,32,595,59	61.8	17.14	inside	0
+text	play	canvas	611,30,669,51	44.9	17.14	inside	1:54
+text	play	canvas	604,57,678,69	22.5	12.04	inside	1ST  SC 12
+text	play	canvas	685,32,703,59	61.8	17.14	inside	0
+text	play	canvas	741,35,794,53	44.9	6.18	inside	AWAY
+text	play	canvas	1006,34,1060,49	33.7	4.80	inside	NORMAL
+text	play	canvas	398,537,881,552	22.5	3.85	inside	SLASHER: JET DRIVE   SHARPSHOOTER: HEAT CHECK   BIG: WALL (D
+screen	play	drawn
+responds	changed	4
