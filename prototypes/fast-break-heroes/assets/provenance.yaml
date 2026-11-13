@@ -9,3 +9,18 @@
 #   date: 2026-01-31
 #   ships: true               # false for a file only the build uses
 #   placeholder: true         # until it is replaced; leave the line out otherwise
+- path: assets/sprites.png
+  origin: code
+  tool: "the game's own ?scene=export, keyed to transparency by a script; replace with your own art in the same layout"
+  date: 2026-11-13
+  ships: true
+- path: assets/sprites.js
+  origin: code
+  tool: "assets/pack-sprites.py, from assets/sprites.png"
+  date: 2026-11-13
+  ships: true
+- path: assets/pack-sprites.py
+  origin: code
+  tool: "written for this game"
+  date: 2026-11-13
+  ships: false

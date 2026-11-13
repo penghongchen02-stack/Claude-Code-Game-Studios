@@ -8,3 +8,4 @@
 - kingdom-adventurers-key-art.png: take: the white halo around each figure, the tiny faces under big headgear; what to take not yet said
 - https://www.spriters-resource.com/media/assets/38/41301.png: a sprite sheet (note only: not opened; paste the image to use it)
 - kairosoft-sprite-sheet-ripped.png: ripped game art, study only: the head/body split, the walk cycle frames, the pose set; never copied in
+- hoopland-court-view.png: take: the whole-court camera from above, the court markings, the arena layout (stands at the top, scoreboard, apron at the sides), 5 on 5; never its logos, team names, sponsors or figures

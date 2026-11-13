@@ -10,10 +10,10 @@ window.CONFIG = {
   // --- the match ---
   half_seconds: { value: 120, min: 30, max: 600, step: 10 },   // seconds a half lasts
   shot_clock: { value: 14, min: 6, max: 30, step: 1 },         // seconds to shoot before a turnover
-  three_radius: { value: 118, min: 60, max: 200, step: 2 },    // px from the rim: beyond it a shot is worth 3
+  three_radius: { value: 160, min: 60, max: 240, step: 2 },    // world px from the rim: beyond it a shot is worth 3 (23.75 ft)
 
   // --- movement ---
-  player_speed: { value: 72, min: 30, max: 150, step: 2 },     // px per second (roles scale it)
+  player_speed: { value: 95, min: 30, max: 200, step: 5 },     // world px per second (roles scale it); the court is 640 long
   jump_height: { value: 20, min: 8, max: 40, step: 1 },        // px a jump rises
   jump_time: { value: 0.55, min: 0.3, max: 1, step: 0.05 },    // seconds in the air
   body_radius: { value: 9, min: 0, max: 20, step: 1 },         // px: players closer than this push apart
