@@ -3,3 +3,4 @@
 - basketball-club-story-players.jpg: take: the player proportions and outline, two-tone shading, the court lines
 - basketball-club-story-club.png: take: the palette and the HUD framing; the club side is for later
 - https://www.roblox.com/games/140510877927109/Pixel-Basketball: take: the character, as inspiration (note only: not watched; paste a screenshot to use it)
+- kairosoft-style-fan-character.png: take: the 2x2 block eyes, the big pink blush, the red mouth, the thick near-black outline, the head about half the figure
