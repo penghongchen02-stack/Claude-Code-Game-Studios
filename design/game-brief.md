@@ -12,6 +12,8 @@ Not baseball but basketball
 7. Catch-up: strict contest and it depend how it play.
 8. a lice of the game.
 After play: I want the character design look like this (the four Basketball Club Story screenshots again)
+After play: How can u improve the img because i can not draw but i need a character design for sure (all of it: faces, hair, bodies, motion, HUD portrait)
+After play: References (a Kairosoft-style fan character, then a Kairosoft-style icon). It does not look it like this can u img trace the one I send you and frame by frame anazlye the detail. If you compare it side by side it does not even look like it
 
 **Pitch:** Pixel 3-on-3 basketball where every player has one special move, and a well-timed chain of passes, drives and specials turns into one unstoppable fast break.
 
@@ -28,13 +30,13 @@ After play: I want the character design look like this (the four Basketball Club
 ## Look and references
 - Mood: bright, cheerful sports-club pixel art; a sunny gym with a cheering crowd; every move reads at a glance.
 - Camera and scale: 2D side view of the court, scrolling with the ball (`follow2d`); native 320x180, scaled by whole numbers, pixel smoothing off.
-- Shapes: chunky big-headed players in the proportions of the screenshots, the head about half the height, big hair shapes with a highlight, two dot eyes and a mouth, stubby arms, big shoes; each of the three roles its own silhouette (lanky Sharpshooter, low compact Slasher, wide tall Big); round ball, boxy hoop and backboard.
+- Shapes: chunky big-headed players in the proportions of the screenshots, the head about half the height, big hair shapes with a highlight, traced from `references/kairosoft-style-icon.png`: a 13-wide head about half the figure, a 7-wide face inside wide four-tone hair that hangs to the jaw, eyes one pixel wide and three tall with a pale patch between them, a red two-wide mouth, one blush pixel a side, a dark band under the chin, brows and mouth that change with the pose; a shaded shirt with a number, two-tone shorts, short legs, bright shoes with a light top row, arms clear of the shirt; a landing squash and a running lean; the controlled player's portrait in the HUD; each of the three roles its own silhouette (lanky Sharpshooter, low compact Slasher, wide tall Big); round ball, boxy hoop and backboard.
 - Values: players and ball brightest; court mid-tone; crowd and stands held darker and lower in contrast.
 - Palette: warm orange court with cream lines, deep blue stands, your team in white and green, theirs in blue and red, the ball bright orange, meter glow yellow; shadows shift cooler.
 - Detail: on faces, hair and jerseys; the crowd is simple repeated rows.
 - Rules: one pixel density, thick dark outline on every figure, two-tone shading, every figure drawn, no emoji, no plain circles.
 - Signature: a full special-move meter makes the player flash and the crowd's rows bob.
-- References: Hoopland (snappy few-frame motion, the flow of a side-view match, the match feel); your four screenshots in `references/` (the proportions, the outlined big-head sprites, the bright court and crowd).
+- References: Hoopland (snappy few-frame motion, the flow of a side-view match, the match feel); your four screenshots in `references/` (the court and crowd); `references/kairosoft-style-icon.png`, traced pixel by pixel for the head and body grammar; `references/kairosoft-style-fan-character.png` (the blush and the mouth).
 - View: 2D · Camera: side view, follows the ball.
 
 ## First minute

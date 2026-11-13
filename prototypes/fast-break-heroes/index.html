@@ -114,7 +114,7 @@ const sfx = {
 };
 
 // ---- The world ---------------------------------------------------------------------------
-const OUT = '#1a1030';                                   // the outline on every figure
+const OUT = '#2a0a06';                                   // the outline on every figure
 const COURT = 640;                                       // court length in px, two screens wide
 const FLOOR_TOP = 124, FLOOR_DEPTH = 30, DEPTH_PX = 40;  // z in [0,1] runs FLOOR_DEPTH px down the screen, 40 px of court
 const HOOPS = [{ x: 26, dir: 1 }, { x: 614, dir: -1 }];  // dir: from the rim toward midcourt
@@ -127,9 +127,9 @@ function dist2(a, b) { return Math.hypot(a.x - b.x, (a.z - b.z) * DEPTH_PX); }
 function dist3(ax, az, ah, bx, bz, bh) { return Math.hypot(ax - bx, (az - bz) * DEPTH_PX, ah - bh); }
 
 const ROLES = {
-  ss: { name: 'SHARPSHOOTER', special: 'HEAT CHECK', speed: 1.0, torso: [7, 8], legs: 5, legW: 2, three: 0.1, block: 0.9, hair: 'spiky' },
-  sl: { name: 'SLASHER', special: 'JET DRIVE', speed: 1.25, torso: [8, 6], legs: 3, legW: 2, three: -0.1, block: 0.8, hair: 'band' },
-  big: { name: 'BIG', special: 'WALL', speed: 0.85, torso: [11, 8], legs: 4, legW: 3, three: -0.25, block: 1.4, hair: 'flat' },
+  ss: { name: 'SHARPSHOOTER', special: 'HEAT CHECK', speed: 1.0, torso: [8, 6], legs: 3, legW: 2, three: 0.1, block: 0.9, hair: 'spiky' },
+  sl: { name: 'SLASHER', special: 'JET DRIVE', speed: 1.25, torso: [9, 5], legs: 2, legW: 2, three: -0.1, block: 0.8, hair: 'band' },
+  big: { name: 'BIG', special: 'WALL', speed: 0.85, torso: [11, 6], legs: 3, legW: 3, three: -0.25, block: 1.4, hair: 'flat' },
 };
 const TEAMS = [
   { name: 'HOME', jersey: '#f4f4ec', trim: '#2fa84f', shorts: '#2fa84f', color: '#4de07a' },
@@ -148,7 +148,7 @@ function mkPlayer(team, role, i) {
     id: i, team, role, x: 320, z: 0.5, h: 0, vh: 0, face: team === 0 ? 1 : -1, vx: 0, vz: 0, moving: false,
     animT: rng() * 10, meter: 0, charge: -1, shootT: 0, jumping: false, stun: 0, lunge: 0, lungeRolled: false,
     heat: 0, jet: 0, wall: 0, dunk: null, buffer: null, think: rng() * 0.3, cut: 0, cutT: tune.cut_every * (0.5 + rng()),
-    jumpVx: 0, jumpVz: 0, hair: HAIR[i], skin: SKIN[i], flash: 0, pushX: 0, pushZ: 0,
+    jumpVx: 0, jumpVz: 0, hair: HAIR[i], skin: SKIN[i], flash: 0, pushX: 0, pushZ: 0, landT: 0, grinT: 0,
   };
 }
 function reset() {
@@ -332,7 +332,7 @@ function useSpecial(p) {
 function scoreBasket(shot) {
   const p = shot.shooter, pts = shot.three ? 3 : 2;
   state.score[p.team] += pts; state.baskets++;
-  fill(p, tune.meter_basket);
+  fill(p, tune.meter_basket); p.grinT = 1.2;
   if (state.lastPasser && state.lastPasser.team === p.team && state.lastPasser !== p && state.t - state.lastPassT < 3) fill(state.lastPasser, tune.meter_assist);
   popup(shot.hoop.x, 0.5, RIM_H + 14, '+' + pts, TEAMS[p.team].color);
   state.crowd = Math.max(state.crowd, p.team === 0 ? 1.5 : 0.6); sfx.swish(); if (p.team === 0) sfx.cheer();
@@ -520,6 +520,8 @@ function updatePlay(dt) {
     if (p.jet > 0) { p.jet -= dt; if (p.jet <= 0 && b.holder === p) p.jet = 0; }
     if (p.wall > 0) { p.wall -= dt; p.vx = p.vz = 0; }
     if (p.flash > 0) p.flash -= dt;
+    if (p.landT > 0) p.landT -= dt;
+    if (p.grinT > 0) p.grinT -= dt;
     if (p.shootT > 0) p.shootT -= dt;
     if (p.charge >= 0) p.charge += dt;
     if (p.buffer) { p.buffer.t -= dt; if (p.buffer.t <= 0) p.buffer = null; }
@@ -529,10 +531,10 @@ function updatePlay(dt) {
     if (p.dunk) {
       const d = p.dunk; d.t += dt; const k = Math.min(1, d.t / d.T);
       p.x = lerp(d.fx, d.tx, k); p.z = lerp(d.fz, d.tz, k); p.h = Math.sin(Math.PI * k) * tune.jump_height * 1.4;
-      if (k >= 1) { p.dunk = null; p.h = 0; }
+      if (k >= 1) { p.dunk = null; p.h = 0; p.landT = 0.18; }
     } else if (p.jumping) {
       p.h += p.vh * dt; p.vh -= p.jumpG * dt; p.x += p.jumpVx * dt; p.z += p.jumpVz * dt;
-      if (p.h <= 0) { p.h = 0; p.jumping = false; p.vh = 0; }
+      if (p.h <= 0) { p.h = 0; p.jumping = false; p.vh = 0; p.landT = 0.18; }
       // a jumping defender blocks a shot in the air
       if (b.mode === 'shot' && b.shot && !b.shot.unblockable && b.shot.shooter.team !== p.team && b.shot.t < tune.block_window
           && dist3(p.x, p.z, p.h + 18, b.x, b.z, b.h) < tune.block_range * ROLES[p.role].block) blockBy(p, b.shot.shooter);
@@ -605,21 +607,37 @@ function updatePlay(dt) {
 }
 
 // ---- Drawing: figures ----------------------------------------------------------------------
-// Heads: a 10x10 grid a style, the outline drawn around every filled cell. Keys: h hair, H hair
-// highlight, s skin, d cheek, e eye, m mouth, b headband. Drawn facing right, flipped outside.
-const FACE = ['.sssesses.', '.sssesses.', '.dsssssms.', '.ssssssss.', '..ssssss..'];
-const HEADS = {
-  spiky: ['.h..h..h..', '.hh.hh.hh.', '.hhHHhhhh.', 'hhhhhhhhhh', '.bbbbbbbb.', ...FACE],
-  swept: ['...hhhhhh.', '.hhhHHhhhh', 'hhhhhhhhhh', 'hhhhhsshhh', '.hsssssss.', ...FACE],
-  flat:  ['.hhhhhhhh.', 'hhhHHHhhhh', 'hhhhhhhhhh', 'hhhhhhhhhh', 'hssssssssh', ...FACE],
-  curly: ['..hhhhhh..', '.hHhhhhHh.', 'hhhhhhhhhh', 'hhhhhhhhhh', 'hhssssssh.', ...FACE],
-  bun:   ['....hhh...', '.hhhhHhhh.', '.hhhhhhhh.', 'hhhhhhhhhh', '.hsssssss.', ...FACE],
-  mohawk:['....hh....', '....hH....', '...hhhh...', '.hhhhhhhh.', '.bbbbbbbb.', ...FACE],
+// Heads traced from references/kairosoft-style-icon.png: a 13-wide head about half the figure, a 7-wide
+// face inside wide four-tone hair that hangs to the jaw, eyes 1 wide and 3 tall, a pale patch between
+// them, a red 2-wide mouth, one blush pixel a side, a dark band under the chin, a near-black outline.
+// Keys: h hair, H light hair, S dark hair, X darkest hair, s skin, L pale skin, D skin edge, N chin
+// shadow, e eye, k blush, m mouth, B brow, b headband. Facing right, flipped outside.
+const FACE = ['...sssssss...', '...Dessess...', '...DeLLess...', '...DeLLessD..', '...ssmmsss...', '...skssksD...', '....sssss....', '....NNNNN....'];
+const FACES = {
+  neutral: FACE,
+  focus:   FACE.map((r, i) => i === 0 ? '...sBssBss...' : r),
+  grin:    FACE.map((r, i) => i === 2 ? '...DsLLsss...' : i === 3 ? '...DsLLsssD..' : i === 4 ? '...smmmmss...' : r),
+  shock:   FACE.map((r, i) => i === 4 ? '...ssmmsss...' : i === 5 ? '...skmmksD...' : r),
+};
+// hair: 5 rows over the face in four mixed tones, then the sides: a 3-wide pattern a face row for the
+// left, mirrored on the right
+const HAIRS = {
+  spiky:  { top: ['....X..S..H..', '...XhS.hH.hh.', '..ShhXhhHhhSh', '.XhhhHhhhhXhh', '.hShhhhhSHhhS'], sides: ['bbb', 'hX.', 'Sh.', 'hS.', 'X..'] },
+  swept:  { top: ['.....HhhhhS..', '...HhhhhhSShh', '..hhhXhhhhhhS', '.hhHhhhSXhhhh', '.ShhhhhhhhHSh'], sides: ['hSX', 'hhS', 'Sh.', 'hX.', 'h..', 'X..'] },
+  flat:   { top: ['.............', '..XXhhhhhhSX.', '.hhHhhhXhhhhS', '.hShhhhhhHhhh', '.XhhhhSShhhhX'], sides: ['hS.', 'Sh.', 'hX.', 'S..', 'h..'] },
+  curly:  { top: ['...HhhhhhhS..', '..hhXhhHhhhh.', '.hHhhhhhhXhhS', 'XhhhSHhhhhhhh', 'hhXhhhhhSHhhX'], sides: ['hhS', 'XhS', 'hX.', 'Sh.', 'hS.', 'X..'] },
+  mohawk: { top: ['.....HH......', '.....hh......', '....XhhS.....', '...hhhhhh....', '..ShhhhhhS...'], sides: ['bbb', 'h..', 'S..'] },
+  bun:    { top: ['......HhhS...', '.....hhhhh...', '..XhhhSHhhhh.', '.hhhHhhhhhXhS', '.ShhhhhSHhhhh'], sides: ['hSX', 'hhS', 'hS.', 'X..', 'h..'] },
 };
 const HEAD_OF = ['spiky', 'swept', 'flat', 'curly', 'mohawk', 'bun']; // a head a player, by id
+const NUMBER_OF = [7, 3, 5, 1, 9, 4];                                   // a jersey number a player
+const DIGITS = {
+  1: ['.#.', '##.', '.#.', '.#.', '###'], 3: ['###', '..#', '###', '..#', '###'], 4: ['#.#', '#.#', '###', '..#', '..#'],
+  5: ['###', '#..', '###', '..#', '###'], 7: ['###', '..#', '..#', '..#', '..#'], 9: ['###', '#.#', '###', '..#', '###'],
+};
 function lighten(hex, k) {
   const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
-  const f = v => Math.round(v + (255 - v) * k).toString(16).padStart(2, '0');
+  const f = v => Math.round(k >= 0 ? v + (255 - v) * k : v * (1 + k)).toString(16).padStart(2, '0');
   return '#' + f(r) + f(g) + f(b);
 }
 function drawGrid(rows, x, y, pal, outline) {
@@ -631,55 +649,78 @@ function drawGrid(rows, x, y, pal, outline) {
   }
   for (let r = 0; r < H; r++) for (let c = 0; c < Wd; c++) { const k = rows[r][c]; if (k !== '.') rect(x + c, y + r, 1, 1, pal[k]); }
 }
-function drawHead(x, y, p, outline = OUT) {
-  const pal = { h: p.hair, H: lighten(p.hair, 0.35), s: p.skin, d: '#f0a08a', e: '#20182c', m: '#c0604a', b: TEAMS[p.team].trim };
-  drawGrid(HEADS[HEAD_OF[p.id % HEAD_OF.length]], x, y, pal, outline);
+const headCache = {};
+function headRows(p, expr) {
+  const key = HEAD_OF[p.id % HEAD_OF.length] + ':' + expr;
+  if (headCache[key]) return headCache[key];
+  const hr = HAIRS[HEAD_OF[p.id % HEAD_OF.length]], face = FACES[expr].map((row, i) => {
+    const sd = hr.sides[i]; if (!sd) return row;
+    const a = row.split('');
+    for (let c = 0; c < 3; c++) if (sd[c] !== '.') { a[c] = sd[c]; a[12 - c] = sd[c]; }
+    return a.join('');
+  });
+  return headCache[key] = [...hr.top, ...face];
 }
+function expressionOf(p, pose) {
+  if (pose === 'stun') return 'shock';
+  if (pose === 'dunk' || p.grinT > 0) return 'grin';
+  if (pose === 'charge' || pose === 'shoot' || pose === 'lunge' || pose === 'wall' || pose === 'jump' || p.jet > 0) return 'focus';
+  return 'neutral';
+}
+function drawHead(x, y, p, outline = OUT, expr = 'neutral') {
+  const pal = { h: p.hair, H: lighten(p.hair, 0.35), S: lighten(p.hair, -0.3), X: lighten(p.hair, -0.55), s: p.skin, L: lighten(p.skin, 0.5), D: lighten(p.skin, -0.15), N: lighten(p.skin, -0.45), e: '#1a1008', k: '#f08a6a', m: '#fd4540', B: lighten(p.hair, -0.55), b: TEAMS[p.team].trim };
+  drawGrid(headRows(p, expr), x, y, pal, outline);
+}
+function drawDigit(n, x, y, c) { const g = DIGITS[n] || DIGITS[7]; for (let r = 0; r < 5; r++) for (let k = 0; k < 3; k++) if (g[r][k] === '#') rect(x + k, y + r, 1, 1, c); }
 function drawPlayer(p, sx, fy, scale = 1) {
   const R = ROLES[p.role], T = TEAMS[p.team], tw = R.torso[0], th = R.torso[1], legH = R.legs, lw = R.legW;
   const hot = (p.heat > 0 || p.jet > 0 || p.wall > 0) && Math.floor(p.animT * 12) % 2 === 0;
   const flash = p.flash > 0 && Math.floor(p.animT * 16) % 2 === 0;
   const outline = hot ? '#ffe14d' : flash ? '#ffffff' : OUT;
-  const shoe = p.team === 0 ? '#3bd36a' : '#ff8c42';
+  const shoe = p.team === 0 ? '#3ac2bb' : '#ff8c42', shoeLight = lighten(shoe, 0.55), skinDark = lighten(p.skin, -0.15), jerseyDark = lighten(T.jersey, -0.18), jerseyLight = lighten(T.jersey, 0.3), numC = p.team === 0 ? T.trim : '#ffffff';
   ctx.save(); ctx.translate(Math.round(sx), Math.round(fy));
   if (p.face < 0) ctx.scale(-1, 1);
   let pose = 'idle';
   if (p.stun > 0) pose = 'stun'; else if (p.wall > 0) pose = 'wall'; else if (p.dunk) pose = 'dunk';
   else if (p.charge >= 0) pose = 'charge'; else if (p.shootT > 0 || (p.jumping && state.ball.holder === p)) pose = 'shoot';
   else if (p.jumping) pose = 'jump'; else if (p.lunge > 0) pose = 'lunge'; else if (p.moving) pose = 'run';
+  if (p.landT > 0) { const k = p.landT / 0.18, sq = k > 0.5 ? 1 - 0.18 * (k - 0.5) * 2 : 1 + 0.06 * k * 2; ctx.scale(2 - sq, sq); }
+  if (pose === 'run') ctx.transform(1, 0, p.jet > 0 ? -0.22 : -0.12, 1, 0, 0);
   const frame = Math.floor(p.animT * (p.jet > 0 ? 20 : 10)) % 4;
   const bob = pose === 'run' && frame % 2 ? -1 : 0;
-  const crouch = pose === 'charge' ? 2 : pose === 'stun' ? 1 : 0;
-  // short legs under a round body, big shoes
+  const crouch = pose === 'charge' ? 1 + Math.min(2, Math.floor(p.charge / tune.shot_charge_time * 3)) : pose === 'stun' ? 1 : 0;
+  // legs: skin, then shoes three wide with a light top row
   const lx = -Math.floor(tw / 2) + 1, rx = Math.floor(tw / 2) - lw - 1;
   let lo = 0, ro = 0, ll = legH - crouch, rl = legH - crouch;
   if (pose === 'run') { const sw = [[2, -2], [0, 0], [-2, 2], [0, 0]][frame]; lo = sw[0]; ro = sw[1]; if (frame === 1) rl -= 1; if (frame === 3) ll -= 1; }
   if (pose === 'jump' || pose === 'dunk' || pose === 'shoot') { ll -= 1; rl -= 1; lo = -1; ro = 1; }
   if (pose === 'lunge') { lo = 3; ro = -2; }
   if (pose === 'wall') { lo = -2; ro = 2; }
-  orect(lx + lo, -ll, lw, ll, p.skin, outline); orect(rx + ro, -rl, lw, rl, p.skin, outline);
+  orect(lx + lo, -ll - 2, lw, ll, p.skin, outline); orect(rx + ro, -rl - 2, lw, rl, p.skin, outline);
   orect(lx + lo - 1, -2, lw + 2, 2, shoe, outline); orect(rx + ro - 1, -2, lw + 2, 2, shoe, outline);
-  rect(lx + lo - 1, -1, lw + 2, 1, '#fff'); rect(rx + ro - 1, -1, lw + 2, 1, '#fff'); // the sole
-  // shorts and jersey, the jersey one wider than the shorts at the shoulders
-  const bodyY = -legH + crouch - 3 + bob;
+  rect(lx + lo - 1, -2, lw + 1, 1, shoeLight); rect(rx + ro - 1, -2, lw + 1, 1, shoeLight);
+  // shorts, two tones, and the shirt with a lighter yoke and darker hem
+  const bodyY = -legH - 2 + crouch - 3 + bob;
   orect(-Math.floor(tw / 2), bodyY, tw, 3, T.shorts, outline);
-  rect(-Math.floor(tw / 2) + 1, bodyY, 1, 3, lighten(T.shorts, 0.3));
-  orect(-Math.floor(tw / 2) - 1, bodyY - th, tw + 2, th, T.jersey, outline);
-  rect(-Math.floor(tw / 2) - 1, bodyY - th, 2, th, T.trim); rect(Math.floor(tw / 2) - 1 + (tw % 2), bodyY - th, 2, th, T.trim); // side stripes
-  rect(-1, bodyY - th + 2, 2, 3, T.trim); // the number
-  // arms (2 px wide), stubby, from the shoulder
-  const top = bodyY - th, armC = p.skin, ar = Math.floor(tw / 2) + 1, al = -Math.floor(tw / 2) - 3;
-  if (pose === 'shoot' || pose === 'jump') { orect(ar, top - 7, 2, 8, armC, outline); orect(al, top - 4, 2, 6, armC, outline); }
-  else if (pose === 'dunk') { orect(ar, top - 9, 2, 10, armC, outline); orect(al, top + 1, 2, 4, armC, outline); }
-  else if (pose === 'charge') { orect(ar, top - 1, 2, 4, armC, outline); orect(ar + 1, top - 4, 2, 4, armC, outline); orect(al, top, 2, 4, armC, outline); }
-  else if (pose === 'wall') { orect(ar, top - 2, 7, 2, armC, outline); orect(al - 5, top - 2, 7, 2, armC, outline); }
-  else if (pose === 'lunge') { orect(ar, top + 1, 7, 2, armC, outline); orect(al, top + 1, 2, 4, armC, outline); }
-  else if (pose === 'run') { const a = frame % 2 ? 2 : -2; orect(ar, top + 1 + a, 2, 4, armC, outline); orect(al, top + 1 - a, 2, 4, armC, outline); }
-  else { orect(ar, top + 1, 2, th - 3, armC, outline); orect(al, top + 1, 2, th - 3, armC, outline); }
-  // the big head (10x10), sitting on the shoulders with no neck
-  const hx = -5 + (pose === 'run' ? 1 : 0) + (pose === 'stun' ? 2 : 0), hy = top - 9;
-  drawHead(hx, hy, p, outline);
-  if (pose === 'stun') { rect(hx + 2, hy - 3, 1, 1, '#ffe14d'); rect(hx + 5, hy - 4, 1, 1, '#ffe14d'); rect(hx + 9, hy - 2, 1, 1, '#ffe14d'); }
+  rect(Math.floor(tw / 2) - 2, bodyY, 2, 3, lighten(T.shorts, -0.25)); rect(-1, bodyY + 1, 1, 2, outline);
+  orect(-Math.floor(tw / 2), bodyY - th, tw, th, T.jersey, outline);
+  rect(-Math.floor(tw / 2), bodyY - 1, tw, 1, jerseyDark); rect(-Math.floor(tw / 2) + 1, bodyY - th, tw - 2, 1, jerseyLight);
+  rect(-Math.floor(tw / 2), bodyY - th, 1, th, T.trim); rect(Math.floor(tw / 2) - 1 + (tw % 2), bodyY - th, 1, th, T.trim); // side stripes
+  drawDigit(NUMBER_OF[p.id % 6], -1, bodyY - th + 1, numC); // the number
+  // arms: skin at the sides of the shirt, a pixel clear of it
+  const top = bodyY - th, armC = p.skin, ar = Math.floor(tw / 2) + 2, al = -Math.floor(tw / 2) - 4;
+  const arm = (x, y, w, h) => { orect(x, y, w, h, armC, outline); if (h > w) rect(x, y + 1, 1, h - 1, skinDark); else rect(x, y + h - 1, w, 1, skinDark); };
+  if (pose === 'shoot' || pose === 'jump') { arm(ar, top - 7, 2, 8); arm(al, top - 4, 2, 6); }
+  else if (pose === 'dunk') { arm(ar, top - 9, 2, 10); arm(al, top + 1, 2, 4); }
+  else if (pose === 'charge') { arm(ar, top - 1, 2, 4); arm(ar + 1, top - 4, 2, 4); arm(al, top, 2, 4); }
+  else if (pose === 'wall') { arm(ar, top - 2, 7, 2); arm(al - 5, top - 2, 7, 2); }
+  else if (pose === 'lunge') { arm(ar, top + 1, 7, 2); arm(al, top + 1, 2, 4); }
+  else if (pose === 'run') { const a = frame % 2 ? 2 : -2; arm(ar, top + 1 + a, 2, 4); arm(al, top + 1 - a, 2, 4); }
+  else { arm(ar, top + 1, 2, th - 2); arm(al, top + 1, 2, th - 2); }
+  // the head (13x13), sitting straight on the shirt, the chin band over its top row
+  const hx = -6 + (pose === 'run' ? 1 : 0) + (pose === 'stun' ? 2 : 0), hy = top - 12;
+  drawHead(hx, hy, p, outline, expressionOf(p, pose));
+  if (pose === 'stun') { rect(hx + 2, hy - 3, 1, 1, '#ffe14d'); rect(hx + 6, hy - 4, 1, 1, '#ffe14d'); rect(hx + 11, hy - 2, 1, 1, '#ffe14d'); }
   if (p.jet > 0) for (let i = 0; i < 3; i++) rect(al - 4 - i * 4, top + 2 + i * 3, 4, 1, '#fff');
   ctx.restore();
 }
@@ -779,7 +820,7 @@ function drawWorld(cam) {
     }
     if (p.charge >= 0) { // the shot bar with its sweet spot
       const prog = Math.min(1.2, p.charge / tune.shot_charge_time), width = tune.sweet_width * (p.heat > 0 ? tune.heat_sweet_mult : 1);
-      const bx = sx - 10, by = fy - p.h - ROLES[p.role].legs - ROLES[p.role].torso[1] - 20;
+      const bx = sx - 10, by = fy - p.h - ROLES[p.role].legs - ROLES[p.role].torso[1] - 26;
       orect(bx, by, 20, 3, '#2a2a3a');
       rect(bx + Math.round(20 * (tune.sweet_center - width)), by, Math.max(1, Math.round(40 * width)), 3, '#ffe14d');
       const inSweet = Math.abs(prog - tune.sweet_center) <= width;
@@ -801,6 +842,11 @@ function drawHUD() {
   text(s.sudden ? 'NEXT BASKET' : `${s.half === 1 ? '1ST' : '2ND'}  SC ${Math.max(0, Math.ceil(s.shotClock))}`, 160, 15, 5, '#ffd27a');
   text(String(s.score[1]), 178, 10, 10, '#fff'); text(TEAMS[1].name, 202, 10, 7, TEAMS[1].color);
   const d = s.level.toUpperCase(); text(d, 300, 8, 5, '#aab', 'right');
+  const me0 = s.players[s.ctrl];
+  orect(3, 2, 19, 19, '#141a33', OUT); drawHead(6, 5, me0, OUT, me0.stun > 0 ? 'shock' : me0.grinT > 0 ? 'grin' : me0.meter >= 1 ? 'focus' : 'neutral');
+  orect(23, 3, 52, 16, '#141a33', OUT);
+  text(ROLES[me0.role].name + ' ' + NUMBER_OF[me0.id % 6], 26, 8, 5, '#fff', 'left');
+  orect(26, 13, 46, 3, '#2a2a3a', OUT); rect(26, 13, Math.round(46 * me0.meter), 3, me0.meter >= 1 && Math.floor(s.t * 8) % 2 === 0 ? '#fff' : me0.meter >= 1 ? '#ffe14d' : TEAMS[0].color);
   // the first minute's prompts
   const b = s.ball, me = s.players[s.ctrl], h = s.hints;
   let hint = '';
@@ -824,7 +870,7 @@ const scenes = {
       text('EVERY FIGURE, EACH WITH ITS OWN OUTLINE', W / 2, 30, 8, '#fff');
       const roles = ['sl', 'ss', 'big'];
       for (let t = 0; t < 2; t++) for (let r = 0; r < 3; r++) {
-        const p = state.players[t * 3 + r], x = 40 + t * 150 + r * 46, fy = 118;
+        const p = state.players[t * 3 + r], x = 34 + t * 160 + r * 50, fy = 118;
         p.face = 1; p.moving = false; p.h = 0; p.charge = -1; p.stun = 0; p.wall = 0; p.jumping = false;
         drawShadow(x, fy, 10); drawPlayer(p, x, fy);
         textOutlined(ROLES[roles[r]].name, x, fy + 8, 5, '#fff', OUT);
