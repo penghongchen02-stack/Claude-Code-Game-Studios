@@ -79,8 +79,8 @@ addEventListener('keyup', e => down.delete(e.code));
 // ---- Touch: a thumb stick on the left half, buttons on the right; shown once the screen is touched ----
 const touch = { on: params.get('touch') === '1', stick: null, held: {}, pointers: {} };
 const BUTTONS = [ // logical px; code: the key each stands for
-  { code: 'KeyP', label: 'PAUSE', x: 304, y: 30, r: 9, c: '#ccc' },
-  { code: 'KeyF', label: 'SPEED', x: 304, y: 50, r: 9, c: '#ffd27a' },
+  { code: 'KeyP', label: 'PAUSE', x: 300, y: 40, r: 13, c: '#ccc' },
+  { code: 'KeyF', label: 'SPEED', x: 300, y: 72, r: 13, c: '#ffd27a' },
 ];
 function canvasPoint(e) { const r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H }; }
 function stickDirs() { // the stick's offset as held arrow keys, with a dead zone
@@ -96,7 +96,7 @@ canvas.addEventListener('pointerdown', e => {
   e.preventDefault(); startAudio(); touch.on = true;
   const pt = canvasPoint(e);
   if (scene !== 'play') { // any tap starts or continues; the difficulty arrows by their side
-    if (scene === 'title' && pt.y > 68 && pt.y < 88) { if (pt.x < W / 2 - 30) hit.add('ArrowLeft'); else if (pt.x > W / 2 + 30) hit.add('ArrowRight'); else hit.add('Enter'); }
+    if (scene === 'title' && pt.y > 70 && pt.y < 92) { if (pt.x < W / 2 - 30) hit.add('ArrowLeft'); else if (pt.x > W / 2 + 30) hit.add('ArrowRight'); else hit.add('Enter'); }
     else hit.add('Enter');
     return;
   }
@@ -116,7 +116,7 @@ function drawTouchUI() {
   if (!touch.on) return;
   for (const b of BUTTONS) {
     ctx.globalAlpha = 0.75; ctx.fillStyle = down.has(b.code) ? '#fff' : b.c; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 1; text(b.label, b.x, b.y + 1, 3, '#10131f');
+    ctx.globalAlpha = 1; text(b.label, b.x, b.y + 1, 5, '#10131f');
   }
 }
 addEventListener('pointerdown', () => startAudio());
@@ -202,12 +202,13 @@ function reset() {
   seed = Number(params.get('seed')) || CONFIG.seed;
   state = {
     t: 0, score: [0, 0], gained: '', level, half: 1, clock: tune.half_seconds, shotClock: tune.shot_clock,
-    players: [], ball: null, poss: 0, ctrl: -1, speed: 1, feed: [], cam: 160, baskets: 0, sudden: false, dead: 0, crowd: 0,
+    players: [], ball: null, poss: 0, ctrl: -1, speed: 1, feed: [], cam: 160,
+    stats: { team: [0, 1].map(() => ({ pts: 0, fga: 0, fgm: 0, tpa: 0, tpm: 0, stl: 0, blk: 0, spc: 0, ast: 0 })), player: {} }, baskets: 0, sudden: false, dead: 0, crowd: 0,
     popups: [], hints: { moved: false, passed: false, shot: false, defended: false, special: false }, shake: 0,
     lastPasser: null, lastPassT: -9, ended: false, halfMsg: 0, flashT: 0,
   };
   const roles = ['sl', 'ss', 'big', 'sl', 'ss']; // five a side: point guard, shooter, centre, forward, forward
-  for (let t = 0; t < 2; t++) for (let r = 0; r < 5; r++) state.players.push(mkPlayer(t, roles[r], t * 5 + r));
+  for (let t = 0; t < 2; t++) for (let r = 0; r < 5; r++) { state.players.push(mkPlayer(t, roles[r], t * 5 + r)); state.stats.player[t * 5 + r] = { pts: 0, fga: 0, fgm: 0, ast: 0, stl: 0, blk: 0, spc: 0 }; }
   state.ball = { x: 320, z: 0.5, h: 0, vx: 0, vz: 0, vh: 0, holder: null, mode: 'held', pass: null, shot: null, dribT: 0, pickup: 0, trail: [], spin: 0 };
   startHalf(1);
 }
@@ -232,7 +233,7 @@ function spotFor(p, hoop) { // the five spots by slot: point at the top, wings, 
   if (sl === 0) return { x: hoop.x + d * 175, z: 0.5 };
   if (sl === 1) return { x: hoop.x + d * 150, z: 0.14 };
   if (sl === 2) return { x: hoop.x + d * 30, z: 0.5 };
-  if (sl === 3) return { x: hoop.x + d * 150, z: 0.86 };
+  if (sl === 3) return { x: hoop.x + d * 125, z: 0.86 };
   return { x: hoop.x + d * 45, z: 0.1 };
 }
 function give(p) {
@@ -294,6 +295,7 @@ function launchShot(p, o) {
   b.holder = null; b.mode = 'shot'; b.x = p.x + p.face * 3; b.z = p.z; b.h = o.dunk ? 22 : 26;
   b.vx = (tx - b.x) / T; b.vz = (tz - b.z) / T; b.vh = (th - b.h + 0.5 * G * T * T) / T;
   b.shot = { shooter: p, made, three, t: 0, T, hoop, unblockable: o.unblockable, dunk: o.dunk, heat: p.heat > 0 };
+  { const ts = state.stats.team[p.team], ps = state.stats.player[p.id]; ts.fga++; ps.fga++; if (three) ts.tpa++; }
   b.trail = [];
   p.shootT = 0.45; p.heat = 0;
   if (!o.dunk && !p.jumping) jump(p, 0, 0, 0.8);
@@ -313,7 +315,7 @@ function blockBy(q, shooter) {
   b.holder = null; b.mode = 'loose'; b.shot = null; b.pass = null; b.pickup = 0.25;
   b.x = shooter.x; b.z = shooter.z; b.h = Math.max(b.h, 12);
   b.vx = -shooter.face * (40 + rng() * 30); b.vz = (rng() - 0.5) * 0.6; b.vh = 30;
-  fill(q, tune.meter_block); popup(q.x, q.z, 34, 'BLOCK!', '#7fd4ff'); sfx.block(); state.shake = 0.2; say(`BLOCKED BY ${TEAMS[q.team].name} ${NUMBER_OF[q.id]}`);
+  fill(q, tune.meter_block); popup(q.x, q.z, 34, 'BLOCK!', '#7fd4ff'); sfx.block(); state.shake = 0.2; state.stats.team[q.team].blk++; state.stats.player[q.id].blk++; say(`BLOCKED BY ${TEAMS[q.team].name} ${NUMBER_OF[q.id]}`);
   if (q.team === 0) state.hints.defended = true;
   events.push({ t: state.t, type: 'block', team: q.team });
   state.poss = -1;
@@ -361,7 +363,7 @@ function trySteal(p) {
   steal(p, h);
 }
 function steal(p, from) {
-  give(p); fill(p, tune.meter_steal); popup(p.x, p.z, 30, 'STEAL!', '#ffe14d'); sfx.steal(); say(`STEAL BY ${TEAMS[p.team].name} ${NUMBER_OF[p.id]}`);
+  give(p); fill(p, tune.meter_steal); popup(p.x, p.z, 30, 'STEAL!', '#ffe14d'); sfx.steal(); state.stats.team[p.team].stl++; state.stats.player[p.id].stl++; say(`STEAL BY ${TEAMS[p.team].name} ${NUMBER_OF[p.id]}`);
   from.stun = 0.3; p.lunge = 0;
   if (p.team === 0) state.hints.defended = true;
   events.push({ t: state.t, type: 'steal', team: p.team });
@@ -372,7 +374,7 @@ function useSpecial(p) {
   if (p.role === 'ss') { if (b.holder !== p) return false; p.heat = tune.heat_duration; }
   else if (p.role === 'sl') { if (b.holder !== p) return false; p.jet = tune.jet_duration; p.charge = -1; }
   else { if (b.holder && b.holder.team === p.team) return false; p.wall = tune.wall_duration; }
-  p.meter = 0; p.flash = 0.6; state.crowd = Math.max(state.crowd, 1.2); sfx.whoosh(); sfx.special();
+  p.meter = 0; p.flash = 0.6; state.crowd = Math.max(state.crowd, 1.2); sfx.whoosh(); sfx.special(); state.stats.team[p.team].spc++; state.stats.player[p.id].spc++;
   popup(p.x, p.z, 34, ROLES[p.role].special + '!', '#ffe14d'); say(`${TEAMS[p.team].name} ${NUMBER_OF[p.id]}: ${ROLES[p.role].special}!`);
   if (p.team === 0) state.hints.special = true;
   events.push({ t: state.t, type: 'special', team: p.team, role: p.role });
@@ -381,6 +383,8 @@ function useSpecial(p) {
 function scoreBasket(shot) {
   const p = shot.shooter, pts = shot.three ? 3 : 2;
   state.score[p.team] += pts; state.baskets++;
+  { const ts = state.stats.team[p.team], ps = state.stats.player[p.id]; ts.pts += pts; ts.fgm++; ps.pts += pts; ps.fgm++; if (shot.three) ts.tpm++;
+    if (state.lastPasser && state.lastPasser.team === p.team && state.lastPasser !== p && state.t - state.lastPassT < 3) { ts.ast++; state.stats.player[state.lastPasser.id].ast++; } }
   fill(p, tune.meter_basket); p.grinT = 1.2;
   if (state.lastPasser && state.lastPasser.team === p.team && state.lastPasser !== p && state.t - state.lastPassT < 3) fill(state.lastPasser, tune.meter_assist);
   popup(shot.hoop.x, 0.5, RIM_H + 14, '+' + pts, TEAMS[p.team].color);
@@ -427,7 +431,7 @@ function aiHandler(p, dt) {
     if (p.role === 'ss' && dist > tune.three_radius * 0.75 && dist < tune.three_radius * 1.4) { useSpecial(p); beginAiShot(p); return; }
     if (p.role === 'sl' && dist < 170 && dist > tune.dunk_range) { useSpecial(p); return; }
   }
-  const range = p.role === 'ss' ? 175 : p.role === 'sl' ? 130 : 90;
+  const range = p.role === 'ss' ? 180 : p.role === 'sl' ? 155 : 95;
   const wants = (open && dist < range) || state.shotClock < 2.5 || (p.heat > 0 && dist < 180);
   if (wants && dist < 200) { beginAiShot(p); return; }
   if (nd < 20 || state.shotClock < 6) {
@@ -933,27 +937,42 @@ function drawWorld() {
 function fmt(t) { t = Math.max(0, Math.ceil(t)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; }
 function drawHUD() {
   const s = state;
-  // the scoreboard over the stands: team, score, period and clock, the shot clock in red
-  orect(88, 2, 144, 17, '#10131f', OUT); rect(89, 3, 142, 1, '#3a5fb0');
-  rect(90, 4, 34, 13, TEAMS[0].trim); text(TEAMS[0].name, 107, 11, 7, '#fff');
-  text(String(s.score[0]), 134, 11, 9, '#fff');
-  rect(146, 4, 1, 13, '#3a3f55');
-  text(s.sudden ? 'OT' : `${s.half === 1 ? '1ST' : '2ND'}`, 158, 11, 6, '#ffd27a');
-  text(s.sudden ? 'NEXT' : fmt(s.clock), 180, 11, 8, s.clock < 10 && !s.sudden ? '#ff6b6b' : '#fff');
-  rect(196, 4, 1, 13, '#3a3f55'); text(String(Math.max(0, Math.ceil(s.shotClock))), 204, 11, 8, '#ff5a5a');
-  rect(212, 4, 1, 13, '#3a3f55');
-  text(String(s.score[1]), 220, 11, 9, '#fff');
-  rect(230, 4, 0, 0, '#000');
-  text(TEAMS[1].name, 250, 11, 7, '#fff'); rect(232, 4, 36, 13, TEAMS[1].jersey); text(TEAMS[1].name, 250, 11, 7, '#fff');
-  orect(272, 3, 44, 9, '#10131f', OUT); text(s.level.toUpperCase(), 294, 8, 5, '#aab');
-  // who has the ball, and the speed
+  // the scoreboard over the stands, big enough for a phone
+  orect(70, 2, 180, 22, '#10131f', OUT); rect(71, 3, 178, 1, '#3a5fb0');
+  rect(72, 4, 44, 19, TEAMS[0].trim); text(TEAMS[0].name, 94, 13, 8, '#fff');
+  text(String(s.score[0]), 130, 13, 12, '#fff');
+  rect(146, 4, 1, 19, '#3a3f55');
+  text(s.sudden ? 'OT' : `${s.half === 1 ? '1ST' : '2ND'}`, 158, 9, 6, '#ffd27a');
+  text(s.sudden ? 'NEXT' : fmt(s.clock), 158, 18, 8, s.clock < 10 && !s.sudden ? '#ff6b6b' : '#fff');
+  rect(170, 4, 1, 19, '#3a3f55'); text(String(Math.max(0, Math.ceil(s.shotClock))), 180, 13, 10, '#ff5a5a');
+  rect(190, 4, 1, 19, '#3a3f55');
+  text(String(s.score[1]), 203, 13, 12, '#fff');
+  rect(216, 4, 32, 19, TEAMS[1].jersey); text(TEAMS[1].name, 232, 13, 8, '#fff');
+  // who has the ball, the speed, the away level
   const hold = s.ball.holder;
-  orect(3, 3, 76, 16, '#10131f', OUT);
-  text(hold ? `BALL: ${TEAMS[hold.team].name} ${NUMBER_OF[hold.id]}` : s.ball.mode === 'shot' ? 'SHOT UP' : s.ball.mode === 'pass' ? 'PASS' : 'LOOSE BALL', 41, 9, 5, '#fff');
-  text(`SPEED ${s.speed}X  ·  F`, 41, 15, 4, '#ffd27a');
-  // the commentary, newest first, fading
-  const y0 = COURT_Y0 + COURT_H + 6;
-  s.feed.slice(0, 2).forEach((f, i) => { if (f.t < 6) textOutlined(f.s, W / 2, y0 + i * 7, i === 0 ? 6 : 4, i === 0 ? '#fff' : '#bbb', OUT); });
+  orect(3, 3, 64, 21, '#10131f', OUT);
+  text(hold ? `BALL ${TEAMS[hold.team].name} ${NUMBER_OF[hold.id]}` : s.ball.mode === 'shot' ? 'SHOT UP' : s.ball.mode === 'pass' ? 'PASS' : 'LOOSE BALL', 35, 10, 7, '#fff');
+  text(`SPEED ${s.speed}X`, 35, 19, 7, '#ffd27a');
+  orect(253, 3, 64, 21, '#10131f', OUT); text('AWAY LEVEL', 285, 10, 6, '#aab'); text(s.level.toUpperCase(), 285, 19, 7, '#fff');
+  // the commentary, one line, fading
+  const f = s.feed[0];
+  if (f && f.t < 6) textOutlined(f.s, W / 2, COURT_Y0 + COURT_H + 7, 7, '#fff', OUT);
+}
+function statsPanel(x, y, w, title, limit = 7) { // the two sides' numbers, a row a stat
+  const t = state.stats.team, rows = [['POINTS', s => s.pts], ['FIELD GOALS', s => `${s.fgm}/${s.fga}`], ['THREES', s => `${s.tpm}/${s.tpa}`], ['ASSISTS', s => s.ast], ['STEALS', s => s.stl], ['BLOCKS', s => s.blk], ['SPECIALS', s => s.spc]].slice(0, limit);
+  orect(x, y, w, 14 + rows.length * 10, '#10131f', OUT);
+  text(TEAMS[0].name, x + 22, y + 7, 7, TEAMS[0].color); text(title, x + w / 2, y + 7, 7, '#ffd27a'); text(TEAMS[1].name, x + w - 22, y + 7, 7, TEAMS[1].color);
+  rows.forEach(([name, fn], i) => { const yy = y + 20 + i * 10; text(String(fn(t[0])), x + 22, yy, 8, '#fff'); text(name, x + w / 2, yy, 6, '#aab'); text(String(fn(t[1])), x + w - 22, yy, 8, '#fff'); });
+}
+function boxScore(x, y, team) { // a side's five players: number, points, assists, steals, blocks, specials
+  const cols = ['NO', 'PTS', 'AST', 'STL', 'BLK', 'SPC'], cw = 24;
+  orect(x, y, cols.length * cw + 6, 20 + 5 * 10, '#10131f', OUT);
+  text(TEAMS[team].name, x + 3 + cols.length * cw / 2, y + 7, 7, TEAMS[team].color);
+  cols.forEach((c, i) => text(c, x + 3 + i * cw + cw / 2, y + 15, 5, '#aab'));
+  for (let r = 0; r < 5; r++) {
+    const p = state.players[team * 5 + r], st = state.stats.player[p.id], yy = y + 25 + r * 10;
+    [NUMBER_OF[p.id], st.pts, st.ast, st.stl, st.blk, st.spc].forEach((v, i) => text(String(v), x + 3 + i * cw + cw / 2, yy, 7, i === 0 ? '#ffd27a' : '#fff'));
+  }
 }
 
 // ---- Scenes -------------------------------------------------------------------------------------
@@ -1052,15 +1071,16 @@ const scenes = {
       const t = state.t;
       for (let i = 0; i < 10; i++) { const p = state.players[i]; p.animT = t; p.moving = true; p.face = i < 5 ? 1 : -1; const x = 34 + i * 28 + (i >= 5 ? 14 : 0); drawShadow(x, 150, 10); drawPlayer(p, x + Math.sin(t * 2 + i) * 3, 150 - (i % 3 === 2 ? Math.abs(Math.sin(t * 3)) * 6 : 0)); }
       drawBall(160 + Math.sin(t * 2) * 60, 130 - Math.abs(Math.sin(t * 4)) * 20, t * 8);
-      orect(60, 30, 200, 34, '#141a33', OUT);
-      textOutlined(TITLE, W / 2, 42, 16, '#ffe14d', '#8a3f14');
-      text('PIXEL 5-ON-5 SIMULATION · ONE SPECIAL MOVE EACH', W / 2, 57, 6, '#fff');
-      orect(104, 70, 112, 14, '#1e2b5c', OUT);
-      text(`<  AWAY: ${level.toUpperCase()}  >`, W / 2, 77, 9, '#fff');
-      text('AWAY SIDE LEVEL: LEFT / RIGHT, OR TAP A SIDE', W / 2, 90, 5, '#ffd27a');
-      orect(72, 96, 176, 34, 'rgba(16,19,31,0.92)', OUT);
-      CONTROLS.forEach((c, i) => text(c.toUpperCase(), W / 2, 102 + i * 7, 5, '#fff'));
-      textOutlined(Math.floor(t * 2) % 2 ? (touch.on ? 'TAP TO TIP OFF · TURN THE PHONE SIDEWAYS' : 'ENTER OR TAP TO TIP OFF') : '', W / 2, 165, 7, '#ffe14d', OUT);
+      orect(40, 26, 240, 40, '#141a33', OUT);
+      textOutlined(TITLE, W / 2, 40, 18, '#ffe14d', '#8a3f14');
+      text('PIXEL 5-ON-5 SIMULATION · ONE SPECIAL MOVE EACH', W / 2, 58, 7, '#fff');
+      orect(90, 72, 140, 18, '#1e2b5c', OUT);
+      text(`<  AWAY: ${level.toUpperCase()}  >`, W / 2, 81, 10, '#fff');
+      text('AWAY LEVEL: LEFT / RIGHT, OR TAP A SIDE', W / 2, 97, 7, '#ffd27a');
+      orect(50, 104, 220, 40, 'rgba(16,19,31,0.92)', OUT);
+      CONTROLS.forEach((c, i) => text(c.toUpperCase(), W / 2, 111 + i * 9, 7, '#fff'));
+      textOutlined(Math.floor(t * 2) % 2 ? (touch.on ? 'TAP TO TIP OFF' : 'ENTER OR TAP TO TIP OFF') : '', W / 2, 160, 9, '#ffe14d', OUT);
+      if (innerHeight > innerWidth) { orect(40, 60, 240, 40, '#10131f', OUT); text('TURN YOUR PHONE SIDEWAYS', W / 2, 75, 12, '#ffe14d'); text('THE MATCH FILLS THE SCREEN', W / 2, 90, 8, '#fff'); }
     },
   },
   play: {
@@ -1072,21 +1092,21 @@ const scenes = {
     draw() {
       ctx.save(); if (state.shake > 0) ctx.translate(Math.round(Math.sin(state.t * 90)), 0);
       drawWorld(); ctx.restore();
-      drawHUD(); drawTouchUI();
+      drawHUD(); if (scene === 'play') drawTouchUI();
     },
   },
   pause: {
     update() { if (pressed('KeyP') || pressed('Escape') || pressed('Enter')) scene = 'play'; },
-    draw() { scenes.play.draw(); ctx.fillStyle = 'rgba(10,10,30,0.6)'; ctx.fillRect(0, 0, W, H); text('PAUSED', W / 2, H / 2 - 8, 16, '#fff'); text('P TO CONTINUE', W / 2, H / 2 + 10, 7, '#ccc'); },
+    draw() { scenes.play.draw(); ctx.fillStyle = 'rgba(10,10,30,0.6)'; ctx.fillRect(0, 0, W, H); text('PAUSED', W / 2, H / 2 - 8, 18, '#fff'); text('TAP OR P TO CONTINUE', W / 2, H / 2 + 12, 8, '#ccc'); },
   },
   half: {
     update(dt) { state.t += dt; if (pressed('Enter') || pressed('Space')) { startHalf(2); state.popups = []; scene = 'play'; } },
     draw() {
-      scenes.play.draw(); ctx.fillStyle = 'rgba(10,10,30,0.6)'; ctx.fillRect(0, 0, W, H);
-      text('HALF TIME', W / 2, 60, 16, '#ffe14d');
-      text(`${TEAMS[0].name} ${state.score[0]}   -   ${state.score[1]} ${TEAMS[1].name}`, W / 2, 85, 10, '#fff');
-      text('TEAMS SWAP ENDS', W / 2, 100, 6, '#ccc');
-      text('ENTER OR TAP FOR THE SECOND HALF', W / 2, 120, 7, '#fff');
+      drawWorld(); ctx.fillStyle = 'rgba(10,10,30,0.8)'; ctx.fillRect(0, 0, W, H);
+      text('HALF TIME', W / 2, 14, 14, '#ffe14d');
+      text(`${TEAMS[0].name} ${state.score[0]}   -   ${state.score[1]} ${TEAMS[1].name}`, W / 2, 30, 10, '#fff');
+      statsPanel(60, 40, 200, 'HALF TIME');
+      textOutlined(Math.floor(state.t * 2) % 2 ? 'TAP OR ENTER FOR THE SECOND HALF' : '', W / 2, 168, 8, '#ffe14d', OUT);
     },
   },
   results: {
@@ -1096,17 +1116,18 @@ const scenes = {
       if (pressed('KeyT') || pressed('Escape')) { scene = 'title'; }
     },
     draw() {
-      scenes.play.draw(); ctx.fillStyle = 'rgba(10,10,30,0.6)'; ctx.fillRect(0, 0, W, H);
+      drawWorld(); ctx.fillStyle = 'rgba(10,10,30,0.84)'; ctx.fillRect(0, 0, W, H);
       const win = state.score[0] > state.score[1];
       if (win) for (let i = 0; i < 40; i++) { const x = (i * 53 + state.t * 20 * (1 + i % 3)) % W, y = (i * 37 + state.t * 30) % H; rect(x, y, 2, 2, SHIRTS[i % SHIRTS.length]); }
-      textOutlined(win ? 'VICTORY' : 'DEFEAT', W / 2, 55, 22, win ? '#ffe14d' : '#9fb4ff', '#8a3f14');
-      text(`${TEAMS[0].name} ${state.score[0]}   -   ${state.score[1]} ${TEAMS[1].name}`, W / 2, 82, 10, '#fff');
-      text(`${state.level.toUpperCase()} AI`, W / 2, 95, 6, '#ccc');
-      text('ENTER OR TAP: NEW MATCH      T: TITLE', W / 2, 120, 7, '#fff');
+      textOutlined(win ? 'HOME WINS' : 'AWAY WINS', W / 2, 11, 13, win ? '#ffe14d' : '#9fb4ff', '#8a3f14');
+      text(`${TEAMS[0].name} ${state.score[0]}   -   ${state.score[1]} ${TEAMS[1].name}   ·   AWAY ${state.level.toUpperCase()}`, W / 2, 24, 8, '#fff');
+      boxScore(6, 31, 0); boxScore(164, 31, 1);
+      text('BOX SCORE: NUMBER, POINTS, ASSISTS, STEALS, BLOCKS, SPECIALS', W / 2, 108, 6, '#aab');
+      statsPanel(60, 114, 200, 'TEAM', 4);
+      textOutlined(Math.floor(state.t * 2) % 2 ? 'TAP OR ENTER: NEW MATCH   ·   T: TITLE' : '', W / 2, 173, 7, '#ffe14d', OUT);
     },
   },
 };
-
 // ---- Loop: fixed step, frame time clamped ---------------------------------------------
 function step() {
   if (pressed('KeyM')) { setMuted(!muted); hit.delete('KeyM'); }

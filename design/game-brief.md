@@ -23,6 +23,7 @@ After play: The animation is still terrible. Fix it over and over until it look 
 After play: (a Hoopland court screenshot) Give the ball animation as well and fix the background to match the game make it 5 vs 5 but be sure to use this example. And fix the camera angle like this
 After play: Can I have a place to play this. Make it access to iPhone and change it to touch screen
 After play: Fix it all until everything work, make sure it work. Fix the ui and ux and make sure it able to play on iPhone and take out the control it a simulation game and fix the bot why are they so close to each other or with the player and fix everything about the game as well while at it until it finally polish.
+After play: Add the halftime stats and box score and make it not a pc game but a mobile so I can read the text and everything
 
 **Pitch:** Pixel 5-on-5 basketball simulation where every player has one special move; you pick the away side's level and watch two teams of fast breaks, dunks and specials play out.
 
@@ -74,6 +75,8 @@ On Normal, after the first two baskets the AI closes out on shooters, jumps lazy
 - [x] Title screen with difficulty select, and Play Again
 - [x] A simulation: both teams play themselves; a commentary feed calls baskets, steals, blocks and specials; speed 1x, 2x, 4x; tap, pause and speed buttons on a phone; the game scales to fill a phone sideways (not tested on a phone)
 - [x] Spacing: defenders stand off their marks and step toward the camera, bodies push apart at a court-sized radius
+- [x] Half-time stats (points, field goals, threes, assists, steals, blocks, specials a side) and a box score at the end (number, points, assists, steals, blocks, specials a player) with team totals
+- [x] Mobile-first text: every HUD, title, panel and prompt line sized to read on a phone held sideways; a portrait phone is told to turn
 - [x] The players drawn from `assets/sprites.png` when it is there (two rows of nine cells a player, 18 poses, layout in `assets/sprites-layout.md`, packed into `assets/sprites.js` by `assets/pack-sprites.py`), from the code figures when it is not; the shipped file is the code figures exported
 
 ## Your systems
