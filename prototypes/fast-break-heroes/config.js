@@ -16,7 +16,7 @@ window.CONFIG = {
   player_speed: { value: 95, min: 30, max: 200, step: 5 },     // world px per second (roles scale it); the court is 640 long
   jump_height: { value: 20, min: 8, max: 40, step: 1 },        // px a jump rises
   jump_time: { value: 0.55, min: 0.3, max: 1, step: 0.05 },    // seconds in the air
-  body_radius: { value: 9, min: 0, max: 20, step: 1 },         // px: players closer than this push apart
+  body_radius: { value: 36, min: 0, max: 80, step: 1 },         // px: players closer than this push apart
 
   // --- shooting ---
   shot_charge_time: { value: 0.75, min: 0.3, max: 2, step: 0.05 }, // seconds the shot bar takes to fill
@@ -25,20 +25,20 @@ window.CONFIG = {
   shot_base_chance: { value: 0.78, min: 0.1, max: 1, step: 0.02 }, // an open, perfectly timed shot
   timing_penalty: { value: 0.7, min: 0, max: 1, step: 0.05 },      // how much a bad release costs
   shot_range_falloff: { value: 220, min: 60, max: 600, step: 10 }, // px over which distance eats the chance
-  contest_dist: { value: 20, min: 6, max: 50, step: 1 },           // px: a defender this close contests
+  contest_dist: { value: 30, min: 6, max: 80, step: 1 },           // px: a defender this close contests
   contest_penalty: { value: 0.3, min: 0, max: 0.8, step: 0.02 },   // chance lost to a hand in the face
-  dunk_range: { value: 26, min: 10, max: 60, step: 1 },            // px from the rim: Space dunks instead
+  dunk_range: { value: 34, min: 10, max: 80, step: 1 },            // px from the rim: Space dunks instead
   layup_chance: { value: 0.85, min: 0.2, max: 1, step: 0.05 },
 
   // --- passing and defence ---
-  pass_speed: { value: 230, min: 80, max: 500, step: 10 },       // px per second
+  pass_speed: { value: 280, min: 80, max: 600, step: 10 },       // px per second
   pass_buffer: { value: 0.35, min: 0, max: 1, step: 0.05 },      // seconds an early press waits for the ball
-  catch_radius: { value: 7, min: 3, max: 20, step: 1 },          // px: the ball is caught this close
-  steal_range: { value: 14, min: 5, max: 30, step: 1 },          // px: a lunge reaches this far
+  catch_radius: { value: 10, min: 3, max: 30, step: 1 },          // px: the ball is caught this close
+  steal_range: { value: 20, min: 5, max: 50, step: 1 },          // px: a lunge reaches this far
   steal_chance: { value: 0.5, min: 0, max: 1, step: 0.05 },      // your lunge on a dribbler
   steal_stun: { value: 0.6, min: 0, max: 2, step: 0.1 },         // seconds a missed lunge stumbles
   lunge_time: { value: 0.25, min: 0.1, max: 0.6, step: 0.05 },
-  block_range: { value: 15, min: 5, max: 40, step: 1 },          // px: a jumping hand this close blocks
+  block_range: { value: 20, min: 5, max: 60, step: 1 },          // px: a jumping hand this close blocks
   block_window: { value: 0.3, min: 0.05, max: 0.8, step: 0.05 }, // seconds after release a shot can be blocked
 
   // --- the special meter ---
@@ -53,7 +53,7 @@ window.CONFIG = {
   jet_duration: { value: 0.9, min: 0.3, max: 3, step: 0.1 },     // seconds of the Slasher's Jet Drive
   jet_speed_mult: { value: 2.3, min: 1, max: 5, step: 0.1 },
   wall_duration: { value: 2.5, min: 0.5, max: 8, step: 0.25 },   // seconds the Big's Wall stands
-  wall_range: { value: 40, min: 10, max: 100, step: 2 },         // px: a shot released this close is blocked
+  wall_range: { value: 50, min: 10, max: 120, step: 2 },         // px: a shot released this close is blocked
 
   // --- teammates ---
   cut_every: { value: 3, min: 1, max: 10, step: 0.5 },           // seconds between off-ball cuts
@@ -65,9 +65,9 @@ window.CONFIG = {
   ai_easy_shot_err: { value: 0.9, min: 0, max: 2, step: 0.05 },      // how far off the sweet spot it releases
   ai_normal_shot_err: { value: 0.5, min: 0, max: 2, step: 0.05 },
   ai_hard_shot_err: { value: 0.2, min: 0, max: 2, step: 0.05 },
-  ai_easy_contest: { value: 12, min: 4, max: 40, step: 1 },          // px it closes to on the ball handler
-  ai_normal_contest: { value: 18, min: 4, max: 40, step: 1 },
-  ai_hard_contest: { value: 24, min: 4, max: 40, step: 1 },
+  ai_easy_contest: { value: 22, min: 4, max: 80, step: 1 },          // px it closes to on the ball handler
+  ai_normal_contest: { value: 30, min: 4, max: 80, step: 1 },
+  ai_hard_contest: { value: 38, min: 4, max: 80, step: 1 },
   ai_easy_steal: { value: 0.15, min: 0, max: 1, step: 0.05 },        // chance of a steal when it lunges or reads a pass
   ai_normal_steal: { value: 0.35, min: 0, max: 1, step: 0.05 },
   ai_hard_steal: { value: 0.6, min: 0, max: 1, step: 0.05 },

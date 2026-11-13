@@ -22,14 +22,15 @@ After play: Make the game load a real sprite sheet image and that is mine work
 After play: The animation is still terrible. Fix it over and over until it look smooth
 After play: (a Hoopland court screenshot) Give the ball animation as well and fix the background to match the game make it 5 vs 5 but be sure to use this example. And fix the camera angle like this
 After play: Can I have a place to play this. Make it access to iPhone and change it to touch screen
+After play: Fix it all until everything work, make sure it work. Fix the ui and ux and make sure it able to play on iPhone and take out the control it a simulation game and fix the bot why are they so close to each other or with the player and fix everything about the game as well while at it until it finally polish.
 
-**Pitch:** Pixel 3-on-3 basketball where every player has one special move, and a well-timed chain of passes, drives and specials turns into one unstoppable fast break.
+**Pitch:** Pixel 5-on-5 basketball simulation where every player has one special move; you pick the away side's level and watch two teams of fast breaks, dunks and specials play out.
 
 **Genre:** arcade sports (basketball)
 
-**Controls:** on a touch screen, a thumb stick on the left half and buttons on the right (shoot/jump, pass/steal, special, switch, pause), tap to start; the phone sideways (built from the person's words, not tested on a phone) · `?scene=sheet` (and `&team=1`) in the address shows the flat character sheet; `?scene=figures` every figure and action · arrows or WASD move · Space shoot (hold, release at the sweet spot) or jump to block · X pass to the teammate you face or steal · Shift the controlled player's special move, when the meter is full · Tab switch defender. Keyboard only. *(guessed)*
+**Controls:** none in play: a simulation (changed after play). Enter or a tap starts and continues; F or the speed button sets 1x, 2x, 4x; P or the pause button pauses; M mutes. The phone sideways (not tested on a phone) · `?scene=sheet` (and `&team=1`) in the address shows the flat character sheet; `?scene=figures` every figure and action · arrows or WASD move · Space shoot (hold, release at the sweet spot) or jump to block · X pass to the teammate you face or steal · Shift the controlled player's special move, when the meter is full · Tab switch defender. Keyboard only. *(guessed)*
 
-**Question:** does chaining passes and a special move into one flowing play feel good for a full short match against an AI that can do the same?
+**Question:** is a simulated 5-on-5 match with specials fun to watch for its full length, and does the away side's level change how it goes?
 
 **Hooks:** one special move per player, charged by good play: the Sharpshooter's deep three with a wide sweet spot, the Slasher's burst drive into a dunk nobody blocks, the Big's wall block that can't be faked. The AI uses them too, at three difficulty levels.
 
@@ -54,24 +55,25 @@ Title screen: pick a difficulty (Easy, Normal, Hard), press Start. Tip-off; your
 On Normal, after the first two baskets the AI closes out on shooters, jumps lazy passes and runs its own specials when its meter fills; by the second half it doubles your ball handler. On Hard it does all of that from the tip, and its shooter rarely misses an open look. On Easy it contests late and never doubles. There is no catch-up boost: a strict, even contest. A loss ends the match with the final score and a Play Again button. *(difficulty tiers guessed)*
 
 ## Core loop
-- Move the ball: dribble, pass to the open teammate, time the shot release.
-- Score or defend; good plays fill the special meter.
-- Fire a special at the right moment to break the defence.
-- The clock runs out; higher score wins, tie goes to the next basket. Play again at any difficulty.
+- Pick the away side's level and tip off; both teams play themselves.
+- Watch: passes, drives, timed shots, steals and blocks fill each player's special meter.
+- A full meter fires that player's special and the commentary line calls it.
+- The clock runs out; higher score wins, tie goes to the next basket. New match at any level, at 1x, 2x or 4x.
 
 ## Goal & fail state
-- Win the match on the clock against the AI at the chosen difficulty. The match ends when time runs out; trailing at the buzzer is the loss. *(tie-break guessed)*
+- The home side wins on the clock against the away side at the chosen level; a session is one match watched to the buzzer. *(tie-break guessed)*
 
 ## Features
 - [x] 5-on-5 full-court match, the whole court on screen from above (changed after play from 3-on-3 side view)
 - [x] Three player roles with their own silhouette and one special move each, on a meter filled by good play; five a side as point, shooter, centre, forward, forward
 - [x] The ball spins as it travels, keeps a shadow on the floor in the air, and trails on passes and shots
-- [x] Shot timing with a visible sweet spot; a press snaps straight into the pose; a pass pressed early fires when the ball arrives
+- [x] Shot timing with a visible sweet spot, now the AI's release on both sides; the bar still shows over the shooter
 - [x] Teammates take five spots (point, two wings, a corner, the centre low), cut and shoot when open; defenders mark by slot; switch defender with a key
 - [x] AI opponents at Easy, Normal and Hard, using the same moves and specials as you
 - [x] Short clock, two halves of two minutes, score and clock big on screen, then a results screen *(half length provisional)*
 - [x] Title screen with difficulty select, and Play Again
-- [x] Touch controls for a phone: a thumb stick and buttons that appear on the first touch; the game scales to fill a phone sideways (not tested on a phone)
+- [x] A simulation: both teams play themselves; a commentary feed calls baskets, steals, blocks and specials; speed 1x, 2x, 4x; tap, pause and speed buttons on a phone; the game scales to fill a phone sideways (not tested on a phone)
+- [x] Spacing: defenders stand off their marks and step toward the camera, bodies push apart at a court-sized radius
 - [x] The players drawn from `assets/sprites.png` when it is there (two rows of nine cells a player, 18 poses, layout in `assets/sprites-layout.md`, packed into `assets/sprites.js` by `assets/pack-sprites.py`), from the code figures when it is not; the shipped file is the code figures exported
 
 ## Your systems
@@ -86,6 +88,7 @@ On Normal, after the first two baskets the AI closes out on shooters, jumps lazy
 -
 
 ## Avoid
+- player control in play: it is a simulation *(you said)*
 - Hoopland's name, art, characters, logos and UI
 - Basketball Club Story's and Kairosoft's name, art, characters, logos and UI
 - no catch-up boost for the trailing team

@@ -29,7 +29,7 @@ const W = 320, H = 180;         // native pixel size; scaled by whole numbers
 const PIXEL = true;             // pixel look: whole-number scale, no smoothing
 const FONT = 'monospace';
 const TITLE = 'FAST BREAK HEROES';
-const CONTROLS = ['Arrows / WASD: move', 'Space: shoot (hold, release at the flash) / jump', 'X: pass / steal', 'Shift: special (meter full)', 'Tab: switch defender', 'P: pause   M: mute'];
+const CONTROLS = ['A simulated match: both teams play themselves', 'Pick the AWAY side\'s level, then watch', 'F or the speed button: 1x, 2x, 4x', 'P: pause   M: mute'];
 const clock = window.GAME_CLOCK || { now: () => performance.now() / 1000 }; // a check may inject one
 const CHEAP = params.get('render') === 'cheap';
 let seed;
@@ -79,11 +79,8 @@ addEventListener('keyup', e => down.delete(e.code));
 // ---- Touch: a thumb stick on the left half, buttons on the right; shown once the screen is touched ----
 const touch = { on: params.get('touch') === '1', stick: null, held: {}, pointers: {} };
 const BUTTONS = [ // logical px; code: the key each stands for
-  { code: 'Space', label: 'SHOOT / JUMP', x: 282, y: 150, r: 17, c: '#ff8c42' },
-  { code: 'KeyX', label: 'PASS / STEAL', x: 246, y: 164, r: 13, c: '#4de07a' },
-  { code: 'ShiftLeft', label: 'SPECIAL', x: 248, y: 126, r: 11, c: '#ffe14d' },
-  { code: 'Tab', label: 'SWITCH', x: 300, y: 112, r: 9, c: '#9fc4ff' },
-  { code: 'KeyP', label: 'II', x: 310, y: 30, r: 7, c: '#ccc' },
+  { code: 'KeyP', label: 'PAUSE', x: 304, y: 30, r: 9, c: '#ccc' },
+  { code: 'KeyF', label: 'SPEED', x: 304, y: 50, r: 9, c: '#ffd27a' },
 ];
 function canvasPoint(e) { const r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H }; }
 function stickDirs() { // the stick's offset as held arrow keys, with a dead zone
@@ -103,9 +100,8 @@ canvas.addEventListener('pointerdown', e => {
     else hit.add('Enter');
     return;
   }
-  const b = BUTTONS.find(b => Math.hypot(pt.x - b.x, pt.y - b.y) <= b.r + 4);
+  const b = BUTTONS.find(b => Math.hypot(pt.x - b.x, pt.y - b.y) <= b.r + 6);
   if (b) { touch.pointers[e.pointerId] = b.code; down.add(b.code); hit.add(b.code); return; }
-  if (pt.x < W * 0.55 && !touch.stick) { touch.stick = { id: e.pointerId, x0: pt.x, y0: pt.y, x: pt.x, y: pt.y }; touch.pointers[e.pointerId] = 'stick'; }
 });
 canvas.addEventListener('pointermove', e => {
   if (e.pointerType === 'mouse') return; e.preventDefault();
@@ -118,17 +114,10 @@ const endTouch = e => {
 canvas.addEventListener('pointerup', endTouch); canvas.addEventListener('pointercancel', endTouch);
 function drawTouchUI() {
   if (!touch.on) return;
-  ctx.globalAlpha = 0.55;
-  const st = touch.stick;
-  const sx = st ? st.x0 : 46, sy = st ? st.y0 : 148;
-  ctx.fillStyle = '#10131f'; ctx.beginPath(); ctx.arc(sx, sy, 22, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#e9e4d8'; const tx = st ? sx + Math.max(-16, Math.min(16, st.x - st.x0)) : sx, ty = st ? sy + Math.max(-16, Math.min(16, st.y - st.y0)) : sy;
-  ctx.beginPath(); ctx.arc(tx, ty, 9, 0, Math.PI * 2); ctx.fill();
   for (const b of BUTTONS) {
-    ctx.fillStyle = down.has(b.code) ? '#fff' : b.c; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 0.9; text(b.label, b.x, b.y + b.r + 5, 3, '#fff'); ctx.globalAlpha = 0.55;
+    ctx.globalAlpha = 0.75; ctx.fillStyle = down.has(b.code) ? '#fff' : b.c; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1; text(b.label, b.x, b.y + 1, 3, '#10131f');
   }
-  ctx.globalAlpha = 1;
 }
 addEventListener('pointerdown', () => startAudio());
 addEventListener('blur', () => down.clear());
@@ -213,7 +202,7 @@ function reset() {
   seed = Number(params.get('seed')) || CONFIG.seed;
   state = {
     t: 0, score: [0, 0], gained: '', level, half: 1, clock: tune.half_seconds, shotClock: tune.shot_clock,
-    players: [], ball: null, poss: 0, ctrl: 0, cam: 160, baskets: 0, sudden: false, dead: 0, crowd: 0,
+    players: [], ball: null, poss: 0, ctrl: -1, speed: 1, feed: [], cam: 160, baskets: 0, sudden: false, dead: 0, crowd: 0,
     popups: [], hints: { moved: false, passed: false, shot: false, defended: false, special: false }, shake: 0,
     lastPasser: null, lastPassT: -9, ended: false, halfMsg: 0, flashT: 0,
   };
@@ -251,7 +240,7 @@ function give(p) {
   b.holder = p; b.mode = 'held'; b.pass = null; b.shot = null; b.x = p.x; b.z = p.z; b.h = 8;
   if (state.poss !== p.team) { state.shotClock = tune.shot_clock; }
   state.poss = p.team;
-  if (p.team === 0) state.ctrl = p.id; else state.ctrl = nearestOf(0, b).id;
+  state.ctrl = -1; // nobody is controlled: a simulation
 }
 function nearestOf(team, at, except = null) {
   let best = null, bd = 1e9;
@@ -259,6 +248,7 @@ function nearestOf(team, at, except = null) {
   return best;
 }
 function nearestOpp(p) { return nearestOf(1 - p.team, p); }
+function say(line) { state.feed.unshift({ s: line, t: 0 }); if (state.feed.length > 4) state.feed.pop(); }
 function popup(x, z, h, s, c = '#fff') { state.popups.push({ x, z, h, s, c, t: 0 }); }
 function fill(p, amount) {
   const was = p.meter >= 1; p.meter = clamp(p.meter + amount, 0, 1);
@@ -323,7 +313,7 @@ function blockBy(q, shooter) {
   b.holder = null; b.mode = 'loose'; b.shot = null; b.pass = null; b.pickup = 0.25;
   b.x = shooter.x; b.z = shooter.z; b.h = Math.max(b.h, 12);
   b.vx = -shooter.face * (40 + rng() * 30); b.vz = (rng() - 0.5) * 0.6; b.vh = 30;
-  fill(q, tune.meter_block); popup(q.x, q.z, 34, 'BLOCK!', '#7fd4ff'); sfx.block(); state.shake = 0.2;
+  fill(q, tune.meter_block); popup(q.x, q.z, 34, 'BLOCK!', '#7fd4ff'); sfx.block(); state.shake = 0.2; say(`BLOCKED BY ${TEAMS[q.team].name} ${NUMBER_OF[q.id]}`);
   if (q.team === 0) state.hints.defended = true;
   events.push({ t: state.t, type: 'block', team: q.team });
   state.poss = -1;
@@ -371,7 +361,7 @@ function trySteal(p) {
   steal(p, h);
 }
 function steal(p, from) {
-  give(p); fill(p, tune.meter_steal); popup(p.x, p.z, 30, 'STEAL!', '#ffe14d'); sfx.steal();
+  give(p); fill(p, tune.meter_steal); popup(p.x, p.z, 30, 'STEAL!', '#ffe14d'); sfx.steal(); say(`STEAL BY ${TEAMS[p.team].name} ${NUMBER_OF[p.id]}`);
   from.stun = 0.3; p.lunge = 0;
   if (p.team === 0) state.hints.defended = true;
   events.push({ t: state.t, type: 'steal', team: p.team });
@@ -383,7 +373,7 @@ function useSpecial(p) {
   else if (p.role === 'sl') { if (b.holder !== p) return false; p.jet = tune.jet_duration; p.charge = -1; }
   else { if (b.holder && b.holder.team === p.team) return false; p.wall = tune.wall_duration; }
   p.meter = 0; p.flash = 0.6; state.crowd = Math.max(state.crowd, 1.2); sfx.whoosh(); sfx.special();
-  popup(p.x, p.z, 34, ROLES[p.role].special + '!', '#ffe14d');
+  popup(p.x, p.z, 34, ROLES[p.role].special + '!', '#ffe14d'); say(`${TEAMS[p.team].name} ${NUMBER_OF[p.id]}: ${ROLES[p.role].special}!`);
   if (p.team === 0) state.hints.special = true;
   events.push({ t: state.t, type: 'special', team: p.team, role: p.role });
   return true;
@@ -394,6 +384,7 @@ function scoreBasket(shot) {
   fill(p, tune.meter_basket); p.grinT = 1.2;
   if (state.lastPasser && state.lastPasser.team === p.team && state.lastPasser !== p && state.t - state.lastPassT < 3) fill(state.lastPasser, tune.meter_assist);
   popup(shot.hoop.x, 0.5, RIM_H + 14, '+' + pts, TEAMS[p.team].color);
+  say(`${TEAMS[p.team].name} ${NUMBER_OF[p.id]} ${shot.dunk ? 'DUNKS IT' : pts === 3 ? 'HITS A THREE' : 'SCORES'}${shot.heat ? ' ON FIRE' : ''}  ${state.score[0]}-${state.score[1]}`);
   state.crowd = Math.max(state.crowd, p.team === 0 ? 1.5 : 0.6); sfx.swish(); if (p.team === 0) sfx.cheer();
   events.push({ t: state.t, type: 'basket', team: p.team, pts });
   if (state.sudden) endMatch();
@@ -414,7 +405,7 @@ function aiOffBall(p, dt) {
   const hoop = hoopFor(p.team), s = spotFor(p, hoop);
   p.cutT -= dt;
   if (p.cutT <= 0) { p.cut = 1; p.cutT = tune.cut_every * (0.6 + rng() * 0.8); }
-  if (p.cut > 0) { p.cut -= dt; s.x = hoop.x + hoop.dir * 18; }
+  if (p.cut > 0) { p.cut -= dt; s.x = hoop.x + hoop.dir * 60; }
   moveToward(p, s, 1, dt);
 }
 function aiHandler(p, dt) {
@@ -452,7 +443,7 @@ function beginAiShot(p) {
   p.releaseAt = (tune.sweet_center + (rng() * 2 - 1) * ai(p, 'shot_err') * width * 2) * tune.shot_charge_time;
 }
 function driveToward(p, hoop, dt) {
-  const q = nearestOpp(p), goal = { x: hoop.x + hoop.dir * 22, z: 0.5 };
+  const q = nearestOpp(p), goal = { x: hoop.x + hoop.dir * 30, z: p.z < 0.5 ? 0.38 : 0.62 };
   if (q && Math.abs(q.z - p.z) < 0.3 && Math.abs(q.x - p.x) < 24 && Math.sign(q.x - p.x) === Math.sign(goal.x - p.x)) {
     goal.z = p.z < 0.5 ? 0.9 : 0.1; goal.x = p.x + Math.sign(goal.x - p.x) * 10; // step around
   }
@@ -467,10 +458,11 @@ function aiDefender(p, dt) {
   const dbl = ai(p, 'double'), doubling = handler && (dbl === 2 || (dbl === 1 && state.half === 2)) && p.id % 5 === 2 && dist2(handler, hoop) < 150;
   if (doubling) mark = handler;
   const onBall = handler && mark === handler;
-  let gap = onBall ? (active ? ai(p, 'contest') * 0.8 : 24) : 12;
+  let gap = onBall ? Math.max(40, active ? ai(p, 'contest') * 0.9 : 52) : 46;
   const toHoop = { x: hoop.x - mark.x, z: (hoop.z - mark.z) };
   const L = Math.hypot(toHoop.x, toHoop.z * DEPTH_PX) || 1;
-  const goal = { x: mark.x + toHoop.x / L * gap, z: clamp(mark.z + toHoop.z / L * gap, 0.05, 0.95) };
+  // between the mark and the hoop, a step nearer the camera so the two never hide each other
+  const goal = { x: mark.x + toHoop.x / L * gap, z: clamp(mark.z + toHoop.z / L * gap + (p.id % 5 === 2 ? -0.07 : 0.07), 0.05, 0.95) };
   moveToward(p, goal, 1, dt);
   p.think -= dt;
   if (p.think > 0 || !onBall || !active) return;
@@ -552,21 +544,20 @@ function updatePlay(dt) {
     s.clock -= dt;
     if (s.clock <= 0) {
       s.clock = 0; sfx.buzzer();
-      if (s.half === 1) { scene = 'half'; return; }
+      if (s.half === 1) { say('HALF TIME'); scene = 'half'; return; }
       if (s.score[0] === s.score[1]) { s.sudden = true; popup(b.x, b.z, 40, 'NEXT BASKET WINS', '#ffe14d'); s.crowd = 1.5; }
       else { endMatch(); return; }
     }
   }
   if (s.poss >= 0 && (b.mode === 'held' || b.mode === 'pass')) {
     s.shotClock -= dt;
-    if (s.shotClock <= 0) { popup(b.x, b.z, 30, 'SHOT CLOCK', '#ff6b6b'); sfx.clank(); const t = 1 - s.poss; b.holder = null; b.mode = 'dead'; s.dead = 0.4; s.poss = t; s.inboundTo = t; }
+    if (s.shotClock <= 0) { popup(b.x, b.z, 30, 'SHOT CLOCK', '#ff6b6b'); sfx.clank(); say('SHOT CLOCK VIOLATION'); const t = 1 - s.poss; b.holder = null; b.mode = 'dead'; s.dead = 0.4; s.poss = t; s.inboundTo = t; }
   }
   // decisions
   for (const p of s.players) {
     if (p.stun > 0) { p.stun -= dt; p.vx = p.vz = 0; continue; }
     if (p.dunk) continue;
-    const human = p.team === 0 && p.id === s.ctrl;
-    if (human) { humanUpdate(p, dt); continue; }
+    // a simulation: both teams play themselves (humanUpdate stays for a later player mode)
     if (b.holder === p) aiHandler(p, dt);
     else if (b.mode === 'loose' || b.mode === 'dead') aiLoose(p, dt);
     else if (s.poss === p.team) aiOffBall(p, dt);
@@ -662,6 +653,7 @@ function updatePlay(dt) {
   if (s.crowd > 0) s.crowd -= dt;
   if (s.shake > 0) s.shake -= dt;
   for (const pp of s.popups) pp.t += dt;
+  for (const f of s.feed) f.t += dt;
   s.popups = s.popups.filter(pp => pp.t < 1.1);
 }
 
@@ -954,22 +946,14 @@ function drawHUD() {
   rect(230, 4, 0, 0, '#000');
   text(TEAMS[1].name, 250, 11, 7, '#fff'); rect(232, 4, 36, 13, TEAMS[1].jersey); text(TEAMS[1].name, 250, 11, 7, '#fff');
   orect(272, 3, 44, 9, '#10131f', OUT); text(s.level.toUpperCase(), 294, 8, 5, '#aab');
-  const me0 = s.players[s.ctrl];
-  orect(3, 2, 19, 19, '#141a33', OUT);
-  if (sheet.ready) { const cell = sheetCell(me0, me0.stun > 0 ? 'stun' : me0.grinT > 0 ? 'grin' : me0.meter >= 1 ? 'charge1' : 'idle'); ctx.drawImage(sheet.img, cell.sx + 7, cell.sy + 7, 14, 14, 5, 4, 14, 14); }
-  else drawHead(6, 5, me0, OUT, me0.stun > 0 ? 'shock' : me0.grinT > 0 ? 'grin' : me0.meter >= 1 ? 'focus' : 'neutral');
-  orect(23, 3, 60, 16, '#141a33', OUT);
-  text(ROLES[me0.role].name + ' ' + NUMBER_OF[me0.id], 26, 8, 5, '#fff', 'left');
-  orect(26, 13, 54, 3, '#2a2a3a', OUT); rect(26, 13, Math.round(54 * me0.meter), 3, me0.meter >= 1 && Math.floor(s.t * 8) % 2 === 0 ? '#fff' : me0.meter >= 1 ? '#ffe14d' : TEAMS[0].color);
-  const b = s.ball, me = s.players[s.ctrl], h = s.hints;
-  let hint = '';
-  if (s.t < 90) {
-    if (b.holder === me && !h.passed) hint = 'ARROWS MOVE  ·  X PASS  ·  SPACE SHOOT';
-    else if (b.holder === me && !h.shot) hint = 'HOLD SPACE, RELEASE AT THE FLASH';
-    else if (s.poss === 1 && !h.defended) hint = 'TAB SWITCH  ·  SPACE JUMP  ·  X STEAL';
-  }
-  if (me.meter >= 1 && !h.special) hint = `SHIFT: ${ROLES[me.role].special}!`;
-  if (hint) textOutlined(hint, W / 2, COURT_Y0 + COURT_H + 6, 6, '#fff', OUT);
+  // who has the ball, and the speed
+  const hold = s.ball.holder;
+  orect(3, 3, 76, 16, '#10131f', OUT);
+  text(hold ? `BALL: ${TEAMS[hold.team].name} ${NUMBER_OF[hold.id]}` : s.ball.mode === 'shot' ? 'SHOT UP' : s.ball.mode === 'pass' ? 'PASS' : 'LOOSE BALL', 41, 9, 5, '#fff');
+  text(`SPEED ${s.speed}X  ·  F`, 41, 15, 4, '#ffd27a');
+  // the commentary, newest first, fading
+  const y0 = COURT_Y0 + COURT_H + 6;
+  s.feed.slice(0, 2).forEach((f, i) => { if (f.t < 6) textOutlined(f.s, W / 2, y0 + i * 7, i === 0 ? 6 : 4, i === 0 ? '#fff' : '#bbb', OUT); });
 }
 
 // ---- Scenes -------------------------------------------------------------------------------------
@@ -1070,19 +1054,20 @@ const scenes = {
       drawBall(160 + Math.sin(t * 2) * 60, 130 - Math.abs(Math.sin(t * 4)) * 20, t * 8);
       orect(60, 30, 200, 34, '#141a33', OUT);
       textOutlined(TITLE, W / 2, 42, 16, '#ffe14d', '#8a3f14');
-      text('PIXEL 5-ON-5 · ONE SPECIAL MOVE EACH', W / 2, 57, 6, '#fff');
+      text('PIXEL 5-ON-5 SIMULATION · ONE SPECIAL MOVE EACH', W / 2, 57, 6, '#fff');
       orect(104, 70, 112, 14, '#1e2b5c', OUT);
-      text(`<  ${level.toUpperCase()}  >`, W / 2, 77, 9, '#fff');
-      text('DIFFICULTY: LEFT / RIGHT', W / 2, 90, 5, '#ffd27a');
-      orect(72, 96, 176, 46, 'rgba(16,19,31,0.92)', OUT);
+      text(`<  AWAY: ${level.toUpperCase()}  >`, W / 2, 77, 9, '#fff');
+      text('AWAY SIDE LEVEL: LEFT / RIGHT, OR TAP A SIDE', W / 2, 90, 5, '#ffd27a');
+      orect(72, 96, 176, 34, 'rgba(16,19,31,0.92)', OUT);
       CONTROLS.forEach((c, i) => text(c.toUpperCase(), W / 2, 102 + i * 7, 5, '#fff'));
-      textOutlined(Math.floor(t * 2) % 2 ? (touch.on ? 'TAP TO TIP OFF · TURN THE PHONE SIDEWAYS' : 'PRESS ENTER TO TIP OFF') : '', W / 2, 165, 7, '#ffe14d', OUT);
+      textOutlined(Math.floor(t * 2) % 2 ? (touch.on ? 'TAP TO TIP OFF · TURN THE PHONE SIDEWAYS' : 'ENTER OR TAP TO TIP OFF') : '', W / 2, 165, 7, '#ffe14d', OUT);
     },
   },
   play: {
     update(dt) {
       if (pressed('KeyP') || pressed('Escape')) { scene = 'pause'; return; }
-      updatePlay(dt);
+      if (pressed('KeyF')) { state.speed = state.speed === 1 ? 2 : state.speed === 2 ? 4 : 1; sfx.select(); }
+      for (let i = 0; i < state.speed; i++) { if (scene !== 'play') break; updatePlay(dt); }
     },
     draw() {
       ctx.save(); if (state.shake > 0) ctx.translate(Math.round(Math.sin(state.t * 90)), 0);
@@ -1101,7 +1086,7 @@ const scenes = {
       text('HALF TIME', W / 2, 60, 16, '#ffe14d');
       text(`${TEAMS[0].name} ${state.score[0]}   -   ${state.score[1]} ${TEAMS[1].name}`, W / 2, 85, 10, '#fff');
       text('TEAMS SWAP ENDS', W / 2, 100, 6, '#ccc');
-      text('ENTER FOR THE SECOND HALF', W / 2, 120, 7, '#fff');
+      text('ENTER OR TAP FOR THE SECOND HALF', W / 2, 120, 7, '#fff');
     },
   },
   results: {
@@ -1117,7 +1102,7 @@ const scenes = {
       textOutlined(win ? 'VICTORY' : 'DEFEAT', W / 2, 55, 22, win ? '#ffe14d' : '#9fb4ff', '#8a3f14');
       text(`${TEAMS[0].name} ${state.score[0]}   -   ${state.score[1]} ${TEAMS[1].name}`, W / 2, 82, 10, '#fff');
       text(`${state.level.toUpperCase()} AI`, W / 2, 95, 6, '#ccc');
-      text('ENTER: PLAY AGAIN      T: TITLE (CHANGE DIFFICULTY)', W / 2, 120, 7, '#fff');
+      text('ENTER OR TAP: NEW MATCH      T: TITLE', W / 2, 120, 7, '#fff');
     },
   },
 };
