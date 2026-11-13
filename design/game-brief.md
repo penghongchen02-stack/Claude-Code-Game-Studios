@@ -21,12 +21,13 @@ After play: (a ripped Kairosoft sprite sheet, study only) Make a basketball char
 After play: Make the game load a real sprite sheet image and that is mine work
 After play: The animation is still terrible. Fix it over and over until it look smooth
 After play: (a Hoopland court screenshot) Give the ball animation as well and fix the background to match the game make it 5 vs 5 but be sure to use this example. And fix the camera angle like this
+After play: Can I have a place to play this. Make it access to iPhone and change it to touch screen
 
 **Pitch:** Pixel 3-on-3 basketball where every player has one special move, and a well-timed chain of passes, drives and specials turns into one unstoppable fast break.
 
 **Genre:** arcade sports (basketball)
 
-**Controls:** `?scene=sheet` (and `&team=1`) in the address shows the flat character sheet; `?scene=figures` every figure and action · arrows or WASD move · Space shoot (hold, release at the sweet spot) or jump to block · X pass to the teammate you face or steal · Shift the controlled player's special move, when the meter is full · Tab switch defender. Keyboard only. *(guessed)*
+**Controls:** on a touch screen, a thumb stick on the left half and buttons on the right (shoot/jump, pass/steal, special, switch, pause), tap to start; the phone sideways (built from the person's words, not tested on a phone) · `?scene=sheet` (and `&team=1`) in the address shows the flat character sheet; `?scene=figures` every figure and action · arrows or WASD move · Space shoot (hold, release at the sweet spot) or jump to block · X pass to the teammate you face or steal · Shift the controlled player's special move, when the meter is full · Tab switch defender. Keyboard only. *(guessed)*
 
 **Question:** does chaining passes and a special move into one flowing play feel good for a full short match against an AI that can do the same?
 
@@ -70,6 +71,7 @@ On Normal, after the first two baskets the AI closes out on shooters, jumps lazy
 - [x] AI opponents at Easy, Normal and Hard, using the same moves and specials as you
 - [x] Short clock, two halves of two minutes, score and clock big on screen, then a results screen *(half length provisional)*
 - [x] Title screen with difficulty select, and Play Again
+- [x] Touch controls for a phone: a thumb stick and buttons that appear on the first touch; the game scales to fill a phone sideways (not tested on a phone)
 - [x] The players drawn from `assets/sprites.png` when it is there (two rows of nine cells a player, 18 poses, layout in `assets/sprites-layout.md`, packed into `assets/sprites.js` by `assets/pack-sprites.py`), from the code figures when it is not; the shipped file is the code figures exported
 
 ## Your systems

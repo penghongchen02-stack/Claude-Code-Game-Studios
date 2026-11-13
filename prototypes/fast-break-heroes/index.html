@@ -5,12 +5,12 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Fast Break Heroes</title>
 <style>
   html, body { margin: 0; height: 100%; background: #0a0a14; overflow: hidden; }
   body { font-variant-numeric: tabular-nums; }
-  canvas { display: block; margin: 0 auto; }
+  canvas { display: block; margin: 0 auto; touch-action: none; -webkit-user-select: none; user-select: none; }
 </style>
 </head>
 <body>
@@ -46,7 +46,7 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 function fit() {
   const k = Math.min(innerWidth / W, innerHeight / H);
-  const s = PIXEL ? Math.max(1, Math.floor(k)) : k;
+  const s = PIXEL ? (k < 2.5 ? k : Math.floor(k)) : k; // a phone takes the fractional fit so the game fills it; a desktop stays on whole pixels
   const r = PIXEL ? 1 : s * (devicePixelRatio || 1);
   canvas.width = Math.round(W * r); canvas.height = Math.round(H * r);
   canvas.style.width = Math.round(W * s) + 'px'; canvas.style.height = Math.round(H * s) + 'px';
@@ -76,6 +76,60 @@ addEventListener('keydown', e => {
   if (e.code === 'Space' || e.code === 'Tab' || e.code.startsWith('Arrow')) e.preventDefault();
 });
 addEventListener('keyup', e => down.delete(e.code));
+// ---- Touch: a thumb stick on the left half, buttons on the right; shown once the screen is touched ----
+const touch = { on: params.get('touch') === '1', stick: null, held: {}, pointers: {} };
+const BUTTONS = [ // logical px; code: the key each stands for
+  { code: 'Space', label: 'SHOOT / JUMP', x: 282, y: 150, r: 17, c: '#ff8c42' },
+  { code: 'KeyX', label: 'PASS / STEAL', x: 246, y: 164, r: 13, c: '#4de07a' },
+  { code: 'ShiftLeft', label: 'SPECIAL', x: 248, y: 126, r: 11, c: '#ffe14d' },
+  { code: 'Tab', label: 'SWITCH', x: 300, y: 112, r: 9, c: '#9fc4ff' },
+  { code: 'KeyP', label: 'II', x: 310, y: 30, r: 7, c: '#ccc' },
+];
+function canvasPoint(e) { const r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H }; }
+function stickDirs() { // the stick's offset as held arrow keys, with a dead zone
+  for (const c of ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']) if (touch.held[c]) { down.delete(c); delete touch.held[c]; }
+  const st = touch.stick; if (!st) return;
+  const dx = st.x - st.x0, dy = st.y - st.y0, L = Math.hypot(dx, dy); if (L < 5) return;
+  const hold = c => { down.add(c); touch.held[c] = true; };
+  if (Math.abs(dx) > L * 0.38) hold(dx > 0 ? 'ArrowRight' : 'ArrowLeft');
+  if (Math.abs(dy) > L * 0.38) hold(dy > 0 ? 'ArrowDown' : 'ArrowUp');
+}
+canvas.addEventListener('pointerdown', e => {
+  if (e.pointerType === 'mouse') return;
+  e.preventDefault(); startAudio(); touch.on = true;
+  const pt = canvasPoint(e);
+  if (scene !== 'play') { // any tap starts or continues; the difficulty arrows by their side
+    if (scene === 'title' && pt.y > 68 && pt.y < 88) { if (pt.x < W / 2 - 30) hit.add('ArrowLeft'); else if (pt.x > W / 2 + 30) hit.add('ArrowRight'); else hit.add('Enter'); }
+    else hit.add('Enter');
+    return;
+  }
+  const b = BUTTONS.find(b => Math.hypot(pt.x - b.x, pt.y - b.y) <= b.r + 4);
+  if (b) { touch.pointers[e.pointerId] = b.code; down.add(b.code); hit.add(b.code); return; }
+  if (pt.x < W * 0.55 && !touch.stick) { touch.stick = { id: e.pointerId, x0: pt.x, y0: pt.y, x: pt.x, y: pt.y }; touch.pointers[e.pointerId] = 'stick'; }
+});
+canvas.addEventListener('pointermove', e => {
+  if (e.pointerType === 'mouse') return; e.preventDefault();
+  if (touch.stick && touch.stick.id === e.pointerId) { const pt = canvasPoint(e); touch.stick.x = pt.x; touch.stick.y = pt.y; stickDirs(); }
+});
+const endTouch = e => {
+  const what = touch.pointers[e.pointerId]; if (!what) return; delete touch.pointers[e.pointerId];
+  if (what === 'stick') { touch.stick = null; stickDirs(); } else down.delete(what);
+};
+canvas.addEventListener('pointerup', endTouch); canvas.addEventListener('pointercancel', endTouch);
+function drawTouchUI() {
+  if (!touch.on) return;
+  ctx.globalAlpha = 0.55;
+  const st = touch.stick;
+  const sx = st ? st.x0 : 46, sy = st ? st.y0 : 148;
+  ctx.fillStyle = '#10131f'; ctx.beginPath(); ctx.arc(sx, sy, 22, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#e9e4d8'; const tx = st ? sx + Math.max(-16, Math.min(16, st.x - st.x0)) : sx, ty = st ? sy + Math.max(-16, Math.min(16, st.y - st.y0)) : sy;
+  ctx.beginPath(); ctx.arc(tx, ty, 9, 0, Math.PI * 2); ctx.fill();
+  for (const b of BUTTONS) {
+    ctx.fillStyle = down.has(b.code) ? '#fff' : b.c; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.9; text(b.label, b.x, b.y + b.r + 5, 3, '#fff'); ctx.globalAlpha = 0.55;
+  }
+  ctx.globalAlpha = 1;
+}
 addEventListener('pointerdown', () => startAudio());
 addEventListener('blur', () => down.clear());
 
@@ -1022,7 +1076,7 @@ const scenes = {
       text('DIFFICULTY: LEFT / RIGHT', W / 2, 90, 5, '#ffd27a');
       orect(72, 96, 176, 46, 'rgba(16,19,31,0.92)', OUT);
       CONTROLS.forEach((c, i) => text(c.toUpperCase(), W / 2, 102 + i * 7, 5, '#fff'));
-      textOutlined(Math.floor(t * 2) % 2 ? 'PRESS ENTER TO TIP OFF' : '', W / 2, 165, 7, '#ffe14d', OUT);
+      textOutlined(Math.floor(t * 2) % 2 ? (touch.on ? 'TAP TO TIP OFF · TURN THE PHONE SIDEWAYS' : 'PRESS ENTER TO TIP OFF') : '', W / 2, 165, 7, '#ffe14d', OUT);
     },
   },
   play: {
@@ -1033,7 +1087,7 @@ const scenes = {
     draw() {
       ctx.save(); if (state.shake > 0) ctx.translate(Math.round(Math.sin(state.t * 90)), 0);
       drawWorld(); ctx.restore();
-      drawHUD();
+      drawHUD(); drawTouchUI();
     },
   },
   pause: {
