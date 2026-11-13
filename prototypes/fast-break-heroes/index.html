@@ -685,7 +685,7 @@ function drawPlayer(p, sx, fy, scale = 1) {
   else if (p.charge >= 0) pose = 'charge'; else if (p.shootT > 0 || (p.jumping && state.ball.holder === p)) pose = 'shoot';
   else if (p.jumping) pose = 'jump'; else if (p.lunge > 0) pose = 'lunge'; else if (p.moving) pose = 'run';
   if (p.landT > 0) { const k = p.landT / 0.18, sq = k > 0.5 ? 1 - 0.18 * (k - 0.5) * 2 : 1 + 0.06 * k * 2; ctx.scale(2 - sq, sq); }
-  if (pose === 'run') ctx.transform(1, 0, p.jet > 0 ? -0.22 : -0.12, 1, 0, 0);
+  const lean = pose === 'run' ? (p.jet > 0 ? 2 : 1) : 0; // the upper body leads the legs when running
   const frame = Math.floor(p.animT * (p.jet > 0 ? 20 : 10)) % 4;
   const bob = pose === 'run' && frame % 2 ? -1 : 0;
   const crouch = pose === 'charge' ? 1 + Math.min(2, Math.floor(p.charge / tune.shot_charge_time * 3)) : pose === 'stun' ? 1 : 0;
@@ -699,6 +699,7 @@ function drawPlayer(p, sx, fy, scale = 1) {
   orect(lx + lo, -ll - 2, lw, ll, p.skin, outline); orect(rx + ro, -rl - 2, lw, rl, p.skin, outline);
   orect(lx + lo - 1, -2, lw + 2, 2, shoe, outline); orect(rx + ro - 1, -2, lw + 2, 2, shoe, outline);
   rect(lx + lo - 1, -2, lw + 1, 1, shoeLight); rect(rx + ro - 1, -2, lw + 1, 1, shoeLight);
+  ctx.translate(lean, 0);
   // shorts, two tones, and the shirt with a lighter yoke and darker hem
   const bodyY = -legH - 2 + crouch - 3 + bob;
   orect(-Math.floor(tw / 2), bodyY, tw, 3, T.shorts, outline);
@@ -862,12 +863,33 @@ function drawHUD() {
 }
 
 // ---- Scenes -------------------------------------------------------------------------------------
+const POSES = [['IDLE', {}], ['RUN', { moving: true }], ['CHARGE', { charge: 0.5 }], ['SHOOT', { shootT: 0.3, jumping: true, h: 10 }], ['JUMP', { jumping: true, h: 12 }], ['DUNK', { dunk: { t: 0.2, T: 0.45 }, h: 14 }], ['STEAL', { lunge: 0.2 }], ['WALL', { wall: 1 }], ['STUN', { stun: 0.5 }], ['SCORED', { grinT: 1 }]];
 const scenes = {
+  // sheet: the character sheet, flat: every player in every pose on a plain ground, with names
+  // (?scene=sheet). Drawn in the same code as play, so it is always the game's current art.
+  sheet: {
+    update(dt) { state.t += dt; },
+    draw() {
+      const team = Number(params.get('team')) || 0;
+      clear('#e9e4d8');
+      text('FAST BREAK HEROES  ·  CHARACTER SHEET  ·  ' + TEAMS[team].name, W / 2, 7, 6, '#3a3028');
+      POSES.forEach(([name], i) => text(name, 44 + i * 28, 16, 4, '#3a3028'));
+      for (let r = 0; r < 3; r++) {
+        const p0 = state.players[team * 3 + r], fy = 62 + r * 54;
+        text(ROLES[p0.role].name, 2, fy - 30, 4, '#3a3028', 'left'); text('NO. ' + NUMBER_OF[p0.id], 2, fy - 24, 4, '#3a3028', 'left');
+        rect(0, fy, W, 1, '#cfc8b8');
+        POSES.forEach(([, f], i) => {
+          const d = Object.assign({}, p0, f, { animT: 0.1, face: 1, flash: 0, heat: 0, jet: 0, landT: 0 });
+          drawPlayer(d, 44 + i * 28, fy - (d.h || 0));
+        });
+      }
+    },
+  },
   figures: {
     update(dt) { state.t += dt; for (const p of state.players) p.animT += dt; },
     draw() {
       drawGym(160, state.t, 0);
-      text('EVERY FIGURE, EACH WITH ITS OWN OUTLINE', W / 2, 30, 8, '#fff');
+      text('EVERY FIGURE, EACH WITH ITS OWN OUTLINE; EVERY ACTION BELOW', W / 2, 30, 7, '#fff');
       const roles = ['sl', 'ss', 'big'];
       for (let t = 0; t < 2; t++) for (let r = 0; r < 3; r++) {
         const p = state.players[t * 3 + r], x = 34 + t * 160 + r * 50, fy = 118;
@@ -877,6 +899,13 @@ const scenes = {
         textOutlined(TEAMS[t].name, x, fy + 15, 5, '#fff', OUT);
       }
       drawBall(W / 2, 100); textOutlined('BALL', W / 2, 110, 5, '#fff', OUT);
+      // every action, on one player: the pose names the fields that draw it
+      const demo = Object.assign({}, state.players[0]); demo.animT = state.t; demo.face = 1;
+      POSES.forEach(([name, f], i) => {
+        const d = Object.assign({}, demo, f), x = 20 + i * 31, fy = 170;
+        drawShadow(x, fy, 12); drawPlayer(d, x, fy - (d.h || 0));
+        textOutlined(name, x, fy + 6, 4, '#fff', OUT);
+      });
       const hp = HOOPS[0]; drawHoop(hp, 0, false); drawHoop(hp, 0, true);
     },
   },

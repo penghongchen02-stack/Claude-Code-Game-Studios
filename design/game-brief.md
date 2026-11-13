@@ -14,12 +14,13 @@ Not baseball but basketball
 After play: I want the character design look like this (the four Basketball Club Story screenshots again)
 After play: How can u improve the img because i can not draw but i need a character design for sure (all of it: faces, hair, bodies, motion, HUD portrait)
 After play: References (a Kairosoft-style fan character, then a Kairosoft-style icon). It does not look it like this can u img trace the one I send you and frame by frame anazlye the detail. If you compare it side by side it does not even look like it
+After play: Like see the char action. If there a way we can make it a flat diagram for the characters
 
 **Pitch:** Pixel 3-on-3 basketball where every player has one special move, and a well-timed chain of passes, drives and specials turns into one unstoppable fast break.
 
 **Genre:** arcade sports (basketball)
 
-**Controls:** arrows or WASD move · Space shoot (hold, release at the sweet spot) or jump to block · X pass to the teammate you face or steal · Shift the controlled player's special move, when the meter is full · Tab switch defender. Keyboard only. *(guessed)*
+**Controls:** `?scene=sheet` (and `&team=1`) in the address shows the flat character sheet; `?scene=figures` every figure and action · arrows or WASD move · Space shoot (hold, release at the sweet spot) or jump to block · X pass to the teammate you face or steal · Shift the controlled player's special move, when the meter is full · Tab switch defender. Keyboard only. *(guessed)*
 
 **Question:** does chaining passes and a special move into one flowing play feel good for a full short match against an AI that can do the same?
 
