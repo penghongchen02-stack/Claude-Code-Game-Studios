@@ -11,6 +11,7 @@ Not baseball but basketball
 6. How hard: the ai should be able to do all that with different level of difficulty.
 7. Catch-up: strict contest and it depend how it play.
 8. a lice of the game.
+After play: I want the character design look like this (the four Basketball Club Story screenshots again)
 
 **Pitch:** Pixel 3-on-3 basketball where every player has one special move, and a well-timed chain of passes, drives and specials turns into one unstoppable fast break.
 
@@ -27,7 +28,7 @@ Not baseball but basketball
 ## Look and references
 - Mood: bright, cheerful sports-club pixel art; a sunny gym with a cheering crowd; every move reads at a glance.
 - Camera and scale: 2D side view of the court, scrolling with the ball (`follow2d`); native 320x180, scaled by whole numbers, pixel smoothing off.
-- Shapes: chunky big-headed players about two heads tall, each of the three roles its own silhouette (lanky Sharpshooter, low compact Slasher, wide tall Big); round ball, boxy hoop and backboard.
+- Shapes: chunky big-headed players in the proportions of the screenshots, the head about half the height, big hair shapes with a highlight, two dot eyes and a mouth, stubby arms, big shoes; each of the three roles its own silhouette (lanky Sharpshooter, low compact Slasher, wide tall Big); round ball, boxy hoop and backboard.
 - Values: players and ball brightest; court mid-tone; crowd and stands held darker and lower in contrast.
 - Palette: warm orange court with cream lines, deep blue stands, your team in white and green, theirs in blue and red, the ball bright orange, meter glow yellow; shadows shift cooler.
 - Detail: on faces, hair and jerseys; the crowd is simple repeated rows.

@@ -127,9 +127,9 @@ function dist2(a, b) { return Math.hypot(a.x - b.x, (a.z - b.z) * DEPTH_PX); }
 function dist3(ax, az, ah, bx, bz, bh) { return Math.hypot(ax - bx, (az - bz) * DEPTH_PX, ah - bh); }
 
 const ROLES = {
-  ss: { name: 'SHARPSHOOTER', special: 'HEAT CHECK', speed: 1.0, torso: [6, 8], legs: 8, legW: 2, three: 0.1, block: 0.9, hair: 'spiky' },
-  sl: { name: 'SLASHER', special: 'JET DRIVE', speed: 1.25, torso: [7, 6], legs: 5, legW: 2, three: -0.1, block: 0.8, hair: 'band' },
-  big: { name: 'BIG', special: 'WALL', speed: 0.85, torso: [11, 9], legs: 7, legW: 3, three: -0.25, block: 1.4, hair: 'flat' },
+  ss: { name: 'SHARPSHOOTER', special: 'HEAT CHECK', speed: 1.0, torso: [7, 8], legs: 5, legW: 2, three: 0.1, block: 0.9, hair: 'spiky' },
+  sl: { name: 'SLASHER', special: 'JET DRIVE', speed: 1.25, torso: [8, 6], legs: 3, legW: 2, three: -0.1, block: 0.8, hair: 'band' },
+  big: { name: 'BIG', special: 'WALL', speed: 0.85, torso: [11, 8], legs: 4, legW: 3, three: -0.25, block: 1.4, hair: 'flat' },
 };
 const TEAMS = [
   { name: 'HOME', jersey: '#f4f4ec', trim: '#2fa84f', shorts: '#2fa84f', color: '#4de07a' },
@@ -605,63 +605,82 @@ function updatePlay(dt) {
 }
 
 // ---- Drawing: figures ----------------------------------------------------------------------
-function drawHead(x, y, p, face) { // x,y: top-left of an 8x7 head; drawn facing right, flipped outside
-  const o = OUT, sk = p.skin, hr = p.hair, R = ROLES[p.role];
-  rect(x + 1, y, 6, 1, o); rect(x, y + 1, 8, 5, o); rect(x + 1, y + 6, 6, 1, o);
-  rect(x + 1, y + 1, 6, 5, sk);
-  // hair by role: its own silhouette
-  if (R.hair === 'spiky') { rect(x + 1, y + 1, 6, 2, hr); rect(x + 1, y - 1, 1, 1, o); rect(x + 3, y - 2, 1, 2, o); rect(x + 5, y - 1, 1, 1, o); rect(x + 1, y - 1, 0, 0, hr); rect(x + 3, y - 1, 1, 1, hr); rect(x + 5, y, 1, 1, hr); rect(x + 1, y, 1, 1, hr); }
-  else if (R.hair === 'band') { rect(x + 1, y + 1, 6, 1, hr); rect(x + 1, y + 2, 6, 1, TEAMS[p.team].trim); }
-  else { rect(x, y - 1, 8, 1, o); rect(x + 1, y, 6, 2, hr); rect(x, y + 1, 1, 2, hr); rect(x + 7, y + 1, 1, 2, hr); }
-  rect(x + 5, y + 3, 1, 1, '#fff'); rect(x + 6, y + 3, 1, 1, o); // the eye, looking ahead
-  rect(x + 6, y + 5, 1, 1, '#c0604a'); // the mouth
+// Heads: a 10x10 grid a style, the outline drawn around every filled cell. Keys: h hair, H hair
+// highlight, s skin, d cheek, e eye, m mouth, b headband. Drawn facing right, flipped outside.
+const FACE = ['.sssesses.', '.sssesses.', '.dsssssms.', '.ssssssss.', '..ssssss..'];
+const HEADS = {
+  spiky: ['.h..h..h..', '.hh.hh.hh.', '.hhHHhhhh.', 'hhhhhhhhhh', '.bbbbbbbb.', ...FACE],
+  swept: ['...hhhhhh.', '.hhhHHhhhh', 'hhhhhhhhhh', 'hhhhhsshhh', '.hsssssss.', ...FACE],
+  flat:  ['.hhhhhhhh.', 'hhhHHHhhhh', 'hhhhhhhhhh', 'hhhhhhhhhh', 'hssssssssh', ...FACE],
+  curly: ['..hhhhhh..', '.hHhhhhHh.', 'hhhhhhhhhh', 'hhhhhhhhhh', 'hhssssssh.', ...FACE],
+  bun:   ['....hhh...', '.hhhhHhhh.', '.hhhhhhhh.', 'hhhhhhhhhh', '.hsssssss.', ...FACE],
+  mohawk:['....hh....', '....hH....', '...hhhh...', '.hhhhhhhh.', '.bbbbbbbb.', ...FACE],
+};
+const HEAD_OF = ['spiky', 'swept', 'flat', 'curly', 'mohawk', 'bun']; // a head a player, by id
+function lighten(hex, k) {
+  const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  const f = v => Math.round(v + (255 - v) * k).toString(16).padStart(2, '0');
+  return '#' + f(r) + f(g) + f(b);
+}
+function drawGrid(rows, x, y, pal, outline) {
+  const H = rows.length, Wd = rows[0].length;
+  const at = (r, c) => r >= 0 && r < H && c >= 0 && c < Wd && rows[r][c] !== '.';
+  for (let r = -1; r <= H; r++) for (let c = -1; c <= Wd; c++) {
+    if (at(r, c)) continue;
+    if (at(r - 1, c) || at(r + 1, c) || at(r, c - 1) || at(r, c + 1) || at(r - 1, c - 1) || at(r - 1, c + 1) || at(r + 1, c - 1) || at(r + 1, c + 1)) rect(x + c, y + r, 1, 1, outline);
+  }
+  for (let r = 0; r < H; r++) for (let c = 0; c < Wd; c++) { const k = rows[r][c]; if (k !== '.') rect(x + c, y + r, 1, 1, pal[k]); }
+}
+function drawHead(x, y, p, outline = OUT) {
+  const pal = { h: p.hair, H: lighten(p.hair, 0.35), s: p.skin, d: '#f0a08a', e: '#20182c', m: '#c0604a', b: TEAMS[p.team].trim };
+  drawGrid(HEADS[HEAD_OF[p.id % HEAD_OF.length]], x, y, pal, outline);
 }
 function drawPlayer(p, sx, fy, scale = 1) {
   const R = ROLES[p.role], T = TEAMS[p.team], tw = R.torso[0], th = R.torso[1], legH = R.legs, lw = R.legW;
   const hot = (p.heat > 0 || p.jet > 0 || p.wall > 0) && Math.floor(p.animT * 12) % 2 === 0;
   const flash = p.flash > 0 && Math.floor(p.animT * 16) % 2 === 0;
   const outline = hot ? '#ffe14d' : flash ? '#ffffff' : OUT;
+  const shoe = p.team === 0 ? '#3bd36a' : '#ff8c42';
   ctx.save(); ctx.translate(Math.round(sx), Math.round(fy));
   if (p.face < 0) ctx.scale(-1, 1);
-  // pose
   let pose = 'idle';
   if (p.stun > 0) pose = 'stun'; else if (p.wall > 0) pose = 'wall'; else if (p.dunk) pose = 'dunk';
   else if (p.charge >= 0) pose = 'charge'; else if (p.shootT > 0 || (p.jumping && state.ball.holder === p)) pose = 'shoot';
   else if (p.jumping) pose = 'jump'; else if (p.lunge > 0) pose = 'lunge'; else if (p.moving) pose = 'run';
   const frame = Math.floor(p.animT * (p.jet > 0 ? 20 : 10)) % 4;
-  const bob = pose === 'run' ? (frame % 2 ? -1 : 0) : pose === 'idle' ? (Math.floor(p.animT * 2) % 2 ? 0 : -1) * 0 : 0;
+  const bob = pose === 'run' && frame % 2 ? -1 : 0;
   const crouch = pose === 'charge' ? 2 : pose === 'stun' ? 1 : 0;
-  // legs
-  const legY = -legH + crouch, lx = -Math.floor(tw / 2) + 1, rx = Math.floor(tw / 2) - lw - 1;
+  // short legs under a round body, big shoes
+  const lx = -Math.floor(tw / 2) + 1, rx = Math.floor(tw / 2) - lw - 1;
   let lo = 0, ro = 0, ll = legH - crouch, rl = legH - crouch;
   if (pose === 'run') { const sw = [[2, -2], [0, 0], [-2, 2], [0, 0]][frame]; lo = sw[0]; ro = sw[1]; if (frame === 1) rl -= 1; if (frame === 3) ll -= 1; }
-  if (pose === 'jump' || pose === 'dunk' || pose === 'shoot') { ll -= 2; rl -= 1; lo = -1; ro = 1; }
+  if (pose === 'jump' || pose === 'dunk' || pose === 'shoot') { ll -= 1; rl -= 1; lo = -1; ro = 1; }
   if (pose === 'lunge') { lo = 3; ro = -2; }
   if (pose === 'wall') { lo = -2; ro = 2; }
   orect(lx + lo, -ll, lw, ll, p.skin, outline); orect(rx + ro, -rl, lw, rl, p.skin, outline);
-  // shoes
-  orect(lx + lo - 1, -2, lw + 2, 2, p.team === 0 ? '#3bd36a' : '#ff8c42', outline); orect(rx + ro - 1, -2, lw + 2, 2, p.team === 0 ? '#3bd36a' : '#ff8c42', outline);
-  // shorts and jersey
-  const bodyY = legY - 4 + bob;
-  orect(-Math.floor(tw / 2), bodyY, tw, 4, T.shorts, outline);
-  orect(-Math.floor(tw / 2), bodyY - th, tw, th, T.jersey, outline);
-  rect(-Math.floor(tw / 2), bodyY - th, 1, th, T.trim); rect(-Math.floor(tw / 2) + 1, bodyY - th + 2, tw - 2, 1, T.trim);
-  rect(Math.floor(tw / 2) - 2, bodyY - th + 4, 1, 2, T.trim);
-  // arms (2 px wide)
-  const top = bodyY - th, armC = p.skin;
-  if (pose === 'shoot' || pose === 'jump') { orect(Math.floor(tw / 2), top - 7, 2, 8, armC, outline); orect(-Math.floor(tw / 2) - 2, top - 4, 2, 6, armC, outline); }
-  else if (pose === 'dunk') { orect(Math.floor(tw / 2), top - 9, 2, 10, armC, outline); orect(-Math.floor(tw / 2) - 2, top + 1, 2, 5, armC, outline); }
-  else if (pose === 'charge') { orect(Math.floor(tw / 2), top - 2, 2, 5, armC, outline); orect(Math.floor(tw / 2) + 1, top - 5, 2, 4, armC, outline); orect(-Math.floor(tw / 2) - 2, top, 2, 5, armC, outline); }
-  else if (pose === 'wall') { orect(Math.floor(tw / 2), top - 3, 7, 2, armC, outline); orect(-Math.floor(tw / 2) - 7, top - 3, 7, 2, armC, outline); }
-  else if (pose === 'lunge') { orect(Math.floor(tw / 2), top + 1, 7, 2, armC, outline); orect(-Math.floor(tw / 2) - 2, top + 1, 2, 5, armC, outline); }
-  else if (pose === 'run') { const a = frame % 2 ? 2 : -2; orect(Math.floor(tw / 2), top + 1 + a, 2, 5, armC, outline); orect(-Math.floor(tw / 2) - 2, top + 1 - a, 2, 5, armC, outline); }
-  else { orect(Math.floor(tw / 2), top + 1, 2, th - 2, armC, outline); orect(-Math.floor(tw / 2) - 2, top + 1, 2, th - 2, armC, outline); }
-  // head (8x7), overlapping the jersey by 1
-  const hx = -4 + (pose === 'run' ? 1 : 0) + (pose === 'stun' ? 2 : 0), hy = top - 6;
-  if (outline !== OUT) { rect(hx - 1, hy - 1, 10, 9, outline); }
-  drawHead(hx, hy, p, p.face);
-  if (pose === 'stun') { rect(hx + 2, hy - 4, 1, 1, '#ffe14d'); rect(hx + 5, hy - 5, 1, 1, '#ffe14d'); rect(hx + 8, hy - 3, 1, 1, '#ffe14d'); }
-  if (p.jet > 0) for (let i = 0; i < 3; i++) rect(-Math.floor(tw / 2) - 6 - i * 4, top + 2 + i * 3, 4, 1, '#fff');
+  orect(lx + lo - 1, -2, lw + 2, 2, shoe, outline); orect(rx + ro - 1, -2, lw + 2, 2, shoe, outline);
+  rect(lx + lo - 1, -1, lw + 2, 1, '#fff'); rect(rx + ro - 1, -1, lw + 2, 1, '#fff'); // the sole
+  // shorts and jersey, the jersey one wider than the shorts at the shoulders
+  const bodyY = -legH + crouch - 3 + bob;
+  orect(-Math.floor(tw / 2), bodyY, tw, 3, T.shorts, outline);
+  rect(-Math.floor(tw / 2) + 1, bodyY, 1, 3, lighten(T.shorts, 0.3));
+  orect(-Math.floor(tw / 2) - 1, bodyY - th, tw + 2, th, T.jersey, outline);
+  rect(-Math.floor(tw / 2) - 1, bodyY - th, 2, th, T.trim); rect(Math.floor(tw / 2) - 1 + (tw % 2), bodyY - th, 2, th, T.trim); // side stripes
+  rect(-1, bodyY - th + 2, 2, 3, T.trim); // the number
+  // arms (2 px wide), stubby, from the shoulder
+  const top = bodyY - th, armC = p.skin, ar = Math.floor(tw / 2) + 1, al = -Math.floor(tw / 2) - 3;
+  if (pose === 'shoot' || pose === 'jump') { orect(ar, top - 7, 2, 8, armC, outline); orect(al, top - 4, 2, 6, armC, outline); }
+  else if (pose === 'dunk') { orect(ar, top - 9, 2, 10, armC, outline); orect(al, top + 1, 2, 4, armC, outline); }
+  else if (pose === 'charge') { orect(ar, top - 1, 2, 4, armC, outline); orect(ar + 1, top - 4, 2, 4, armC, outline); orect(al, top, 2, 4, armC, outline); }
+  else if (pose === 'wall') { orect(ar, top - 2, 7, 2, armC, outline); orect(al - 5, top - 2, 7, 2, armC, outline); }
+  else if (pose === 'lunge') { orect(ar, top + 1, 7, 2, armC, outline); orect(al, top + 1, 2, 4, armC, outline); }
+  else if (pose === 'run') { const a = frame % 2 ? 2 : -2; orect(ar, top + 1 + a, 2, 4, armC, outline); orect(al, top + 1 - a, 2, 4, armC, outline); }
+  else { orect(ar, top + 1, 2, th - 3, armC, outline); orect(al, top + 1, 2, th - 3, armC, outline); }
+  // the big head (10x10), sitting on the shoulders with no neck
+  const hx = -5 + (pose === 'run' ? 1 : 0) + (pose === 'stun' ? 2 : 0), hy = top - 9;
+  drawHead(hx, hy, p, outline);
+  if (pose === 'stun') { rect(hx + 2, hy - 3, 1, 1, '#ffe14d'); rect(hx + 5, hy - 4, 1, 1, '#ffe14d'); rect(hx + 9, hy - 2, 1, 1, '#ffe14d'); }
+  if (p.jet > 0) for (let i = 0; i < 3; i++) rect(al - 4 - i * 4, top + 2 + i * 3, 4, 1, '#fff');
   ctx.restore();
 }
 function drawBall(sx, sy) {
@@ -731,7 +750,7 @@ function drawWorld(cam) {
   for (const hp of HOOPS) drawHoop(hp, cam, false);
   const b = s.ball;
   // shadows
-  for (const p of s.players) drawShadow(p.x - cam, floorY(p.z), ROLES[p.role].torso[0] + 2);
+  for (const p of s.players) drawShadow(p.x - cam, floorY(p.z), ROLES[p.role].torso[0] + 4);
   drawShadow(b.x - cam, floorY(b.z) + 1, 4);
   // the Wall's zone
   for (const p of s.players) if (p.wall > 0) { ctx.fillStyle = 'rgba(255,225,77,0.18)'; ctx.fillRect(Math.round(p.x - cam - tune.wall_range), 60, tune.wall_range * 2, 96); }
@@ -754,13 +773,13 @@ function drawWorld(cam) {
     const full = p.meter >= 1 && Math.floor(s.t * 8) % 2 === 0;
     orect(sx - 5, fy + 2, 10, 2, '#2a2a3a'); rect(sx - 5, fy + 2, Math.round(10 * p.meter), 2, full ? '#fff' : p.meter >= 1 ? '#ffe14d' : TEAMS[p.team].color);
     if (p.team === 0 && p.id === s.ctrl && scene !== 'figures') {
-      const ty = fy - p.h - ROLES[p.role].legs - 4 - ROLES[p.role].torso[1] - 12;
+      const ty = fy - p.h - ROLES[p.role].legs - 3 - ROLES[p.role].torso[1] - 14;
       rect(sx - 3, ty - 3, 6, 1, OUT); rect(sx - 2, ty - 2, 4, 1, '#4de07a'); rect(sx - 1, ty - 1, 2, 1, '#4de07a'); rect(sx - 3, ty - 2, 1, 1, OUT); rect(sx + 2, ty - 2, 1, 1, OUT); rect(sx - 2, ty - 1, 1, 1, OUT); rect(sx + 1, ty - 1, 1, 1, OUT); rect(sx - 1, ty, 2, 1, OUT);
       if (p.meter >= 1) textOutlined('SHIFT', sx, ty - 8, 6, '#ffe14d', OUT);
     }
     if (p.charge >= 0) { // the shot bar with its sweet spot
       const prog = Math.min(1.2, p.charge / tune.shot_charge_time), width = tune.sweet_width * (p.heat > 0 ? tune.heat_sweet_mult : 1);
-      const bx = sx - 10, by = fy - p.h - 38;
+      const bx = sx - 10, by = fy - p.h - ROLES[p.role].legs - ROLES[p.role].torso[1] - 20;
       orect(bx, by, 20, 3, '#2a2a3a');
       rect(bx + Math.round(20 * (tune.sweet_center - width)), by, Math.max(1, Math.round(40 * width)), 3, '#ffe14d');
       const inSweet = Math.abs(prog - tune.sweet_center) <= width;
