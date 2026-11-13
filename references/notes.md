@@ -7,3 +7,4 @@
 - kairosoft-style-icon.png: take: the whole head grammar at a clean grid: four-tone dithered hair, narrow face inside wide hair, 2x3 eyes, red 3x2 mouth, blush, pale centre; the simple body with shaded shirt and bright shoes
 - kingdom-adventurers-key-art.png: take: the white halo around each figure, the tiny faces under big headgear; what to take not yet said
 - https://www.spriters-resource.com/media/assets/38/41301.png: a sprite sheet (note only: not opened; paste the image to use it)
+- kairosoft-sprite-sheet-ripped.png: ripped game art, study only: the head/body split, the walk cycle frames, the pose set; never copied in
